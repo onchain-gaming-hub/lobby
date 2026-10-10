@@ -268,6 +268,13 @@ pub fn mark_room_created(claim: &mut PlayerClaim, now: i64) -> Result<()> {
     Ok(())
 }
 
+/// rematch_create: records the create (so a following quick_match_create is cooled down) but is NOT
+/// itself limited — a rematch needs a game-signed Ended room, so it can't be looped cheaply, and a
+/// solo creator whose game ended fast would otherwise lose the whole REMATCH_WINDOW (review P4 m1).
+pub fn record_room_created(claim: &mut PlayerClaim, now: i64) {
+    claim.last_created_at = now;
+}
+
 /// After `init_claim`, the ONLY place that points a claim at a room. Every entry ix must go through here so
 /// `last_joined_at` (the L13 (c) idle clock) can never be forgotten (Opus gate review n3).
 pub fn enter_room(claim: &mut PlayerClaim, room: &RoomRef, now: i64) {

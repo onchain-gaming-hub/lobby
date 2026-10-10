@@ -79,7 +79,7 @@ fn closed_rematch_room_counts_as_stale() {
     let (old2, h2, o2) = ended_room(&mut svm, &game);
     let ra = next_room_id(&svm, &game);
     { let ix = ix_rematch_create(&svm, &game, old2, &h2.pubkey(), &h2.pubkey(), None, ra); ok(send(&mut svm, &[ix], &[&h2])); }
-    { let ix = ix_rematch_create(&svm, &game, old2, &o2.pubkey(), &o2.pubkey(), Some(r2), ra + 1); assert_err(&send(&mut svm, &[ix], &[&o2]), code(E::WrongRoom)); }
+    { let ix = ix_rematch_create(&svm, &game, old2, &o2.pubkey(), &o2.pubkey(), Some(r2), ra + 1); assert_err(&send(&mut svm, &[ix], &[&o2]), code(E::StaleRematch)); } // proof for a room the pointer doesn't name = stale read
 }
 
 #[test]
@@ -112,12 +112,77 @@ fn player_who_left_mid_game_can_still_rematch() {
 }
 
 #[test]
-fn rematch_create_respects_the_create_cooldown() {
+fn rematch_create_is_not_cooled_down_but_records_the_create() {
+    // solo-ish creator whose game ended within the cooldown can still rematch (review P4 m1)
     let (mut svm, g) = game_world();
     let game = g.program;
     let (id, host, _) = starting_room(&mut svm, &game); // host created < 60s ago
     ok(crank(&mut svm, ix_start_game(&game, id)));
     ok(crank(&mut svm, ix_finish_game(&game, id, true)));
     let nid = next_room_id(&svm, &game);
-    { let ix = ix_rematch_create(&svm, &game, id, &host.pubkey(), &host.pubkey(), None, nid); assert_err(&send(&mut svm, &[ix], &[&host]), code(E::CreateCooldown)); }
+    { let ix = ix_rematch_create(&svm, &game, id, &host.pubkey(), &host.pubkey(), None, nid); ok(send(&mut svm, &[ix], &[&host])); }
+    assert_eq!(read::<PlayerClaim>(&svm, &claim_pda(&host.pubkey())).last_created_at, now(&svm));
+    // …so a quick create right after is cooled down
+    ok(send(&mut svm, &[ix_leave_room(&game, nid, &host.pubkey(), false)], &[&host]));
+    let r = { let ix = ix_qm_create(&svm, &game, &host.pubkey(), &host.pubkey(), next_room_id(&svm, &game)); send(&mut svm, &[ix], &[&host]) };
+    assert_err(&r, code(E::CreateCooldown));
+}
+
+#[test]
+fn kicked_caller_may_replace_a_dead_or_full_rematch_room() {
+    let (mut svm, g) = game_world();
+    let game = g.program;
+    let (old, host, other) = ended_room(&mut svm, &game);
+    let r1 = next_room_id(&svm, &game);
+    { let ix = ix_rematch_create(&svm, &game, old, &host.pubkey(), &host.pubkey(), None, r1); ok(send(&mut svm, &[ix], &[&host])); }
+    { let ix = ix_rematch_join(&svm, &game, old, &other.pubkey(), r1); ok(send(&mut svm, &[ix], &[&other])); }
+    ok(send(&mut svm, &[ix_kick(&game, r1, &host.pubkey(), 1, &other.pubkey())], &[&host]));
+    for s in 1..4 {
+        ok(send(&mut svm, &[ix_add_bot(&game, r1, &host.pubkey(), s)], &[&host])); // now full
+    }
+    // within the kick cooldown, but the room is not joinable → stale, so `other` may create
+    { let ix = ix_rematch_join(&svm, &game, old, &other.pubkey(), r1); assert_err(&send(&mut svm, &[ix], &[&other]), code(E::StaleRematch)); }
+    let r2 = next_room_id(&svm, &game);
+    { let ix = ix_rematch_create(&svm, &game, old, &other.pubkey(), &other.pubkey(), Some(r1), r2); ok(send(&mut svm, &[ix], &[&other])); }
+}
+
+#[test]
+fn rematch_room_of_another_game_is_stale() {
+    let (mut svm, g) = game_world();
+    let game = g.program;
+    let other_game = anchor_lang::prelude::Pubkey::new_unique();
+    setup_game(&mut svm, other_game, default_params());
+    let (old, _host, other) = ended_room(&mut svm, &game);
+    let foreign_host = player(&mut svm);
+    let foreign = create_room(&mut svm, &other_game, &foreign_host); // same room_id space, other game
+    let mut ix = ix_rematch_join(&svm, &game, old, &other.pubkey(), foreign);
+    ix.accounts[4].pubkey = room_pda(&other_game, foreign);
+    assert_err(&send(&mut svm, &[ix], &[&other]), code(E::StaleRematch));
+}
+
+#[test]
+fn r4_rematch_create_relayer_pays_exactly_room_rent() {
+    let (mut svm, g) = game_world();
+    let game = g.program;
+    let (old, host, _) = ended_room(&mut svm, &game);
+    let relayer = funded(&mut svm);
+    let before = lamports(&svm, &relayer.pubkey());
+    let nid = next_room_id(&svm, &game);
+    { let ix = ix_rematch_create(&svm, &game, old, &host.pubkey(), &relayer.pubkey(), None, nid); ok(send(&mut svm, &[ix], &[&host, &relayer])); }
+    assert_eq!(before - lamports(&svm, &relayer.pubkey()), svm.minimum_balance_for_rent_exemption(351));
+    assert_eq!(room(&svm, &game, nid).rent_payer, relayer.pubkey());
+}
+
+#[test]
+fn live_player_cannot_rematch_into_a_second_room() {
+    let (mut svm, g) = game_world();
+    let game = g.program;
+    let (old, host, other) = ended_room(&mut svm, &game);
+    let elsewhere = player(&mut svm);
+    let r = create_room(&mut svm, &game, &elsewhere);
+    join(&mut svm, &game, r, &other); // `other` is live elsewhere now
+    let nid = next_room_id(&svm, &game);
+    { let ix = ix_rematch_create(&svm, &game, old, &other.pubkey(), &other.pubkey(), None, nid); assert_err(&send(&mut svm, &[ix], &[&other]), code(E::AlreadyInRoom)); }
+    { let ix = ix_rematch_create(&svm, &game, old, &host.pubkey(), &host.pubkey(), None, nid); ok(send(&mut svm, &[ix], &[&host])); }
+    { let ix = ix_rematch_join(&svm, &game, old, &other.pubkey(), nid); assert_err(&send(&mut svm, &[ix], &[&other]), code(E::AlreadyInRoom)); }
 }

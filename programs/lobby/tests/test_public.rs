@@ -2,7 +2,6 @@
 mod common;
 use {
     ::lobby::{errors::LobbyError as E, *},
-    anchor_lang::prelude::Pubkey,
     common::*,
     solana_signer::Signer,
 };
@@ -192,5 +191,54 @@ fn no_backfill_below_min_humans_and_no_host_controls() {
     ok(crank(&mut svm, ix_tick(&game, id, true)));
     assert_eq!(room(&svm, &game, id).phase, Phase::Waiting); // 1 human < min_humans 2
     assert_err(&send(&mut svm, &[ix_add_bot(&game, id, &a.pubkey(), 1)], &[&a]), code(E::PublicNoHostControl));
-    let _ = Pubkey::default();
+}
+
+#[test]
+fn r4_quick_match_create_relayer_pays_exactly_room_rent() {
+    let (mut svm, g) = game_world();
+    let game = g.program;
+    let a = player(&mut svm);
+    let relayer = funded(&mut svm);
+    let before = lamports(&svm, &relayer.pubkey());
+    { let ix = ix_qm_create(&svm, &game, &a.pubkey(), &relayer.pubkey(), 1); ok(send(&mut svm, &[ix], &[&a, &relayer])); }
+    assert_eq!(before - lamports(&svm, &relayer.pubkey()), svm.minimum_balance_for_rent_exemption(351));
+    assert_eq!(room(&svm, &game, 1).rent_payer, relayer.pubkey());
+}
+
+#[test]
+fn counter_race_on_quick_match_create_is_stale_even_for_a_player_on_cooldown() {
+    // pointer stays None, but a private create_room moved next_room_id → key check → StaleMatchmaker,
+    // and it must win over CreateCooldown (mark_room_created runs after the race checks)
+    let (mut svm, g) = game_world();
+    let game = g.program;
+    let (a, b) = (player(&mut svm), player(&mut svm));
+    let id = create_room(&mut svm, &game, &a); // A on cooldown now
+    ok(send(&mut svm, &[ix_leave_room(&game, id, &a.pubkey(), false)], &[&a]));
+    let stale = ix_qm_create(&svm, &game, &a.pubkey(), &a.pubkey(), next_room_id(&svm, &game));
+    create_room(&mut svm, &game, &b); // moves the counter
+    assert_eq!(pointer(&svm, &game), None);
+    assert_err(&send(&mut svm, &[stale], &[&a]), code(E::StaleMatchmaker));
+}
+
+#[test]
+fn create_room_counter_race_beats_cooldown() {
+    let (mut svm, g) = game_world();
+    let game = g.program;
+    let (a, b) = (player(&mut svm), player(&mut svm));
+    let id = create_room(&mut svm, &game, &a);
+    ok(send(&mut svm, &[ix_leave_room(&game, id, &a.pubkey(), false)], &[&a]));
+    let stale = ix_create_room(&svm, &game, &a.pubkey(), &a.pubkey(), next_room_id(&svm, &game));
+    create_room(&mut svm, &game, &b);
+    assert_err(&send(&mut svm, &[stale], &[&a]), code(E::StaleMatchmaker));
+}
+
+#[test]
+fn live_player_cannot_quick_match_into_a_second_room() {
+    let (mut svm, g) = game_world();
+    let game = g.program;
+    let (a, b) = (player(&mut svm), player(&mut svm));
+    create_room(&mut svm, &game, &a); // private, live
+    let id = qm(&mut svm, &game, &b);
+    let r = { let ix = ix_qm_join(&svm, &game, id, &a.pubkey()); send(&mut svm, &[ix], &[&a]) };
+    assert_err(&r, code(E::AlreadyInRoom));
 }

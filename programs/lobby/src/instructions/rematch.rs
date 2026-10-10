@@ -44,10 +44,10 @@ pub fn handle_rematch_join(ctx: Context<RematchJoin>) -> Result<()> {
         r.game_program == a.old_room.game_program && a.old_room.rematch_room_id == Some(r.room_id),
         LobbyError::StaleRematch
     );
+    require!(joinable(r), LobbyError::StaleRematch); // dead / full → client goes to rematch_create
     let prev = a.prev_room.as_ref().map(|p| p.to_account_info());
     require_claim_free(&a.claim, prev.as_ref())?;
-    require_not_kicked(&a.claim, &r.room_ref(), now)?; // kicked → wait, never fall through to create
-    require!(joinable(r), LobbyError::StaleRematch); // dead / full → client goes to rematch_create
+    require_not_kicked(&a.claim, &r.room_ref(), now)?; // joinable but kicked → wait
     seat_player(r, &mut a.claim, now)?;
     Ok(())
 }
@@ -93,11 +93,15 @@ pub fn handle_rematch_create(ctx: Context<RematchCreate>) -> Result<()> {
     // retryable race checks first: if a joinable rematch room exists, the client must join it
     if let Some(id) = a.old_room.rematch_room_id {
         let info = a.rematch_room.as_ref().ok_or(LobbyError::StaleRematch)?.to_account_info();
-        require_keys_eq!(info.key(), room_pda(&a.old_room.game_program, id), LobbyError::WrongRoom);
+        // a proof for a room the pointer no longer names = stale read (concurrent create) → retryable
+        require_keys_eq!(info.key(), room_pda(&a.old_room.game_program, id), LobbyError::StaleRematch);
         if info.owner == &crate::ID && !info.data_is_empty() {
             let r = Room::try_deserialize(&mut &info.try_borrow_data()?[..])?;
-            require_not_kicked(&a.claim, &r.room_ref(), now)?; // kicked must not redirect the group
-            require!(!joinable(&r), LobbyError::StaleRematch);
+            if joinable(&r) {
+                // still joinable: the group goes there — a kicked caller waits, never redirects it
+                require_not_kicked(&a.claim, &r.room_ref(), now)?;
+                return err!(LobbyError::StaleRematch);
+            }
         } // closed → stale
     }
     let prev = a.prev_room.as_ref().map(|p| p.to_account_info());
@@ -114,7 +118,7 @@ pub fn handle_rematch_create(ctx: Context<RematchCreate>) -> Result<()> {
         player,
         now,
     )?;
-    mark_room_created(&mut a.claim, now)?;
+    record_room_created(&mut a.claim, now); // not cooled down (see record_room_created)
     enter_room(&mut a.claim, &room.room_ref(), now);
     a.old_room.rematch_room_id = Some(room.room_id);
     write_room(&new_room, &room)?;
