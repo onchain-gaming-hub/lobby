@@ -26,6 +26,7 @@ pub fn validate_config(p: &ConfigParams) -> Result<()> {
         && p.min_seats <= p.max_seats
         && [t.wait, t.ready, t.lobby, t.start, t.max_game, t.rematch_window, t.retention].iter().all(|x| *x > 0)
         && t.retention >= t.rematch_window
+        && t.wait < t.lobby // else a public room is cancelled before bots can ever fill it (Opus n8)
         && t.ready <= MAX_READY_TTL
         && t.start <= MAX_START_TTL
         && t.lobby <= MAX_LOBBY_TTL
@@ -256,13 +257,19 @@ pub fn emit_room_created(room: &Room, rematch_of: Option<u64>, now: i64) {
     });
 }
 
+/// The ONLY place that points a claim at a room. Every entry ix must go through here so
+/// `last_joined_at` (the L13 (c) idle clock) can never be forgotten (Opus gate review n3).
+pub fn enter_room(claim: &mut PlayerClaim, room: &RoomRef, now: i64) {
+    claim.current = Some(*room);
+    claim.last_joined_at = now;
+}
+
 /// Seat a player (claim already checked free) and point the claim at this room.
 pub fn seat_player(room: &mut Room, claim: &mut PlayerClaim, now: i64) -> Result<usize> {
     let i = room.lowest_empty().ok_or(LobbyError::RoomFull)?;
     room.seats[i] = Seat { kind: SeatKind::Human, player: claim.player, ready: false, left: false };
     room.last_human_activity_at = now;
-    claim.current = Some(room.room_ref());
-    claim.last_joined_at = now;
+    enter_room(claim, &room.room_ref(), now);
     emit_seat(room, i, claim.player, SeatCause::Join, now);
     Ok(i)
 }

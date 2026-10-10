@@ -59,3 +59,40 @@ fn r4_prefunded_claim_pda_payer_covers_only_the_shortfall() {
     let c: PlayerClaim = read(&svm, &claim_pda(&player.pubkey()));
     assert_eq!(c.rent_payer, relayer.pubkey());
 }
+
+#[test]
+fn r1_relayer_paid_claim_stays_relayer_paid_through_user_paid_rooms_then_refunds_relayer() {
+    // 03 §2 R1 regression guard: the main relayer-drain path
+    let (mut svm, g) = game_world();
+    let game = g.program;
+    let p = funded(&mut svm);
+    let relayer = funded(&mut svm);
+    ok(send(&mut svm, &[ix_init_claim(&p.pubkey(), &relayer.pubkey())], &[&p, &relayer]));
+    // the player now pays for rooms with their own wallet, joins and leaves
+    let id = create_room(&mut svm, &game, &p); // payer = p
+    ok(send(&mut svm, &[ix_leave_room(&game, id, &p.pubkey(), false)], &[&p]));
+    let host = player(&mut svm);
+    let id2 = create_room(&mut svm, &game, &host);
+    join(&mut svm, &game, id2, &p);
+    ok(send(&mut svm, &[ix_leave_room(&game, id2, &p.pubkey(), false)], &[&p]));
+    let c: PlayerClaim = read(&svm, &claim_pda(&p.pubkey()));
+    assert_eq!(c.rent_payer, relayer.pubkey(), "rent_payer must never follow a later payer");
+    advance(&mut svm, CLAIM_IDLE_SECS);
+    let claim_lamports = lamports(&svm, &claim_pda(&p.pubkey()));
+    let (p_before, r_before) = (lamports(&svm, &p.pubkey()), lamports(&svm, &relayer.pubkey()));
+    { let ix = ix_close_claim(&svm, &p.pubkey(), &relayer.pubkey()); ok(crank(&mut svm, ix)); }
+    assert_eq!(lamports(&svm, &relayer.pubkey()) - r_before, claim_lamports);
+    assert_eq!(lamports(&svm, &p.pubkey()), p_before);
+}
+
+#[test]
+fn r2_no_instruction_takes_a_rent_payer_argument() {
+    let idl: serde_json::Value = serde_json::from_str(include_str!("../../../idls/lobby.json")).unwrap();
+    for ix in idl["instructions"].as_array().unwrap() {
+        for arg in ix["args"].as_array().unwrap() {
+            let name = arg["name"].as_str().unwrap();
+            assert!(!name.contains("rent_payer") && !name.contains("payer"), "{}: arg {name}", ix["name"]);
+            assert_ne!(arg["type"], serde_json::json!("pubkey"), "{}: pubkey arg {name} — destinations must come from accounts", ix["name"]);
+        }
+    }
+}

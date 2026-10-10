@@ -56,8 +56,7 @@ pub fn handle_create_room(ctx: Context<CreateRoom>) -> Result<()> {
         player,
         now,
     )?;
-    a.claim.current = Some(room.room_ref());
-    a.claim.last_joined_at = now;
+    enter_room(&mut a.claim, &room.room_ref(), now);
     write_room(&new_room, &room)?;
     emit_room_created(&room, None, now);
     emit_seat(&room, 0, player, SeatCause::Join, now);

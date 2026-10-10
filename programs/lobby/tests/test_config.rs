@@ -123,3 +123,14 @@ fn update_config_owner_only_and_validated() {
     let r = send(&mut svm, &[ix_update_config(&game, &g.owner.pubkey(), p)], &[&g.owner]);
     assert_err(&r, code(E::InvalidConfig));
 }
+
+#[test]
+fn wait_must_be_shorter_than_lobby() {
+    let mut svm = new_svm();
+    let owner = funded(&mut svm);
+    let game = anchor_lang::prelude::Pubkey::new_unique();
+    put_game_entry(&mut svm, &game, &owner.pubkey(), false);
+    let mut p = default_params();
+    p.ttl.wait = p.ttl.lobby;
+    assert_err(&send(&mut svm, &[ix_init_lobby(&game, &owner.pubkey(), p)], &[&owner]), code(E::InvalidConfig));
+}

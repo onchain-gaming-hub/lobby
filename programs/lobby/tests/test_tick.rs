@@ -99,3 +99,20 @@ fn start_ttl_and_game_ttl_cancel() {
     // terminal → tick is a no-op
     ok(crank(&mut svm, ix_tick(&game, id2, false)));
 }
+
+#[test]
+fn relayer_crank_shape_placeholder_plus_trailing_readonly_user_signer() {
+    // SKILL v3 §3.7: FE appends the user as a readonly signer after the crank's accounts;
+    // private rooms pass the matchmaker placeholder (= program id) so the signer can't land in that slot.
+    let (mut svm, g) = game_world();
+    let game = g.program;
+    let host = player(&mut svm);
+    let id = create_room(&mut svm, &game, &host);
+    advance(&mut svm, 1800);
+    let user = funded(&mut svm);
+    let mut ix = ix_tick(&game, id, false);
+    assert_eq!(ix.accounts[1].pubkey, ::lobby::ID); // placeholder present
+    ix.accounts.push(anchor_lang::prelude::AccountMeta::new_readonly(user.pubkey(), true));
+    ok(send(&mut svm, &[ix], &[&user]));
+    assert_eq!(room(&svm, &game, id).end_reason, EndReason::LobbyExpired);
+}
