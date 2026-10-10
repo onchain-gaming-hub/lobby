@@ -70,9 +70,9 @@ pub struct QuickMatchCreate<'info> {
 pub fn handle_quick_match_create(ctx: Context<QuickMatchCreate>) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;
     let a = ctx.accounts;
-    require!(a.config.public_enabled, LobbyError::ModeDisabled);
-    // retryable race checks first (a client that read an empty pointer must learn to join instead)
+    // retryable race check first (a client that read an empty pointer must learn to join instead)
     require!(a.matchmaker.open_public_room.is_none(), LobbyError::StaleMatchmaker);
+    require!(a.config.public_enabled, LobbyError::ModeDisabled);
     let prev = a.prev_room.as_ref().map(|p| p.to_account_info());
     require_claim_free(&a.claim, prev.as_ref())?;
     let player = a.player.key();

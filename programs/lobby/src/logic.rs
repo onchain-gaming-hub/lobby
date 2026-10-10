@@ -268,11 +268,17 @@ pub fn mark_room_created(claim: &mut PlayerClaim, now: i64) -> Result<()> {
     Ok(())
 }
 
-/// rematch_create: records the create (so a following quick_match_create is cooled down) but is NOT
-/// itself limited — a rematch needs a game-signed Ended room, so it can't be looped cheaply, and a
-/// solo creator whose game ended fast would otherwise lose the whole REMATCH_WINDOW (review P4 m1).
-pub fn record_room_created(claim: &mut PlayerClaim, now: i64) {
-    claim.last_created_at = now;
+/// rematch_create: the FIRST create after the old game ended is exempt from the cooldown (a creator
+/// whose game ended within 60s would otherwise lose the whole REMATCH_WINDOW — review P4 m1); every
+/// later one is cooled down, or one Ended room would allow create → leave → create loops that burn
+/// the relayer's rent budget (Opus gate P4 M1).
+pub fn mark_rematch_created(claim: &mut PlayerClaim, game_ended_at: i64, now: i64) -> Result<()> {
+    if claim.last_created_at < game_ended_at {
+        claim.last_created_at = now;
+        Ok(())
+    } else {
+        mark_room_created(claim, now)
+    }
 }
 
 /// After `init_claim`, the ONLY place that points a claim at a room. Every entry ix must go through here so

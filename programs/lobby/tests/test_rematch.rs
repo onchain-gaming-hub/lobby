@@ -75,7 +75,7 @@ fn closed_rematch_room_counts_as_stale() {
     svm.set_account(room_pda(&game, r1), solana_account::Account::default()).unwrap(); // as if closed
     let r2 = next_room_id(&svm, &game);
     { let ix = ix_rematch_create(&svm, &game, old, &other.pubkey(), &other.pubkey(), Some(r1), r2); ok(send(&mut svm, &[ix], &[&other])); }
-    // wrong proof key → WrongRoom
+    // proof key for a room the pointer doesn't name → StaleRematch (stale read)
     let (old2, h2, o2) = ended_room(&mut svm, &game);
     let ra = next_room_id(&svm, &game);
     { let ix = ix_rematch_create(&svm, &game, old2, &h2.pubkey(), &h2.pubkey(), None, ra); ok(send(&mut svm, &[ix], &[&h2])); }
@@ -112,15 +112,16 @@ fn player_who_left_mid_game_can_still_rematch() {
 }
 
 #[test]
-fn rematch_create_is_not_cooled_down_but_records_the_create() {
+fn first_rematch_create_after_the_game_is_exempt_but_records_the_create() {
     // solo-ish creator whose game ended within the cooldown can still rematch (review P4 m1)
     let (mut svm, g) = game_world();
     let game = g.program;
     let (id, host, _) = starting_room(&mut svm, &game); // host created < 60s ago
     ok(crank(&mut svm, ix_start_game(&game, id)));
+    advance(&mut svm, 5); // a real match takes time; created strictly before the game ended
     ok(crank(&mut svm, ix_finish_game(&game, id, true)));
     let nid = next_room_id(&svm, &game);
-    { let ix = ix_rematch_create(&svm, &game, id, &host.pubkey(), &host.pubkey(), None, nid); ok(send(&mut svm, &[ix], &[&host])); }
+    { let ix = ix_rematch_create(&svm, &game, id, &host.pubkey(), &host.pubkey(), None, nid); ok(send(&mut svm, &[ix], &[&host])); } // first rematch: exempt
     assert_eq!(read::<PlayerClaim>(&svm, &claim_pda(&host.pubkey())).last_created_at, now(&svm));
     // …so a quick create right after is cooled down
     ok(send(&mut svm, &[ix_leave_room(&game, nid, &host.pubkey(), false)], &[&host]));
@@ -147,17 +148,41 @@ fn kicked_caller_may_replace_a_dead_or_full_rematch_room() {
 }
 
 #[test]
-fn rematch_room_of_another_game_is_stale() {
+fn rematch_room_of_another_game_with_the_same_id_is_stale() {
+    // the real case: pointer = Some(r1) and the other game's room r1 exists too
     let (mut svm, g) = game_world();
     let game = g.program;
     let other_game = anchor_lang::prelude::Pubkey::new_unique();
     setup_game(&mut svm, other_game, default_params());
-    let (old, _host, other) = ended_room(&mut svm, &game);
-    let foreign_host = player(&mut svm);
-    let foreign = create_room(&mut svm, &other_game, &foreign_host); // same room_id space, other game
-    let mut ix = ix_rematch_join(&svm, &game, old, &other.pubkey(), foreign);
-    ix.accounts[4].pubkey = room_pda(&other_game, foreign);
+    let (old, host, other) = ended_room(&mut svm, &game);
+    let r1 = next_room_id(&svm, &game);
+    { let ix = ix_rematch_create(&svm, &game, old, &host.pubkey(), &host.pubkey(), None, r1); ok(send(&mut svm, &[ix], &[&host])); }
+    let mut fid = 0;
+    while fid < r1 {
+        let h = player(&mut svm);
+        fid = create_room(&mut svm, &other_game, &h);
+    }
+    assert_eq!(fid, r1);
+    let mut ix = ix_rematch_join(&svm, &game, old, &other.pubkey(), r1);
+    ix.accounts[4].pubkey = room_pda(&other_game, r1);
     assert_err(&send(&mut svm, &[ix], &[&other]), code(E::StaleRematch));
+}
+
+#[test]
+fn one_ended_room_cannot_be_looped_to_burn_rent_budget() {
+    // Opus gate P4 M1 regression: rematch_create → leave → rematch_create (dead proof) …
+    let (mut svm, g) = game_world();
+    let game = g.program;
+    let (old, host, _other) = ended_room(&mut svm, &game);
+    let relayer = funded(&mut svm);
+    let r1 = next_room_id(&svm, &game);
+    { let ix = ix_rematch_create(&svm, &game, old, &host.pubkey(), &relayer.pubkey(), None, r1); ok(send(&mut svm, &[ix], &[&host, &relayer])); } // first: exempt
+    ok(send(&mut svm, &[ix_leave_room(&game, r1, &host.pubkey(), false)], &[&host]));
+    advance(&mut svm, 1);
+    let r2 = next_room_id(&svm, &game);
+    { let ix = ix_rematch_create(&svm, &game, old, &host.pubkey(), &relayer.pubkey(), Some(r1), r2); assert_err(&send(&mut svm, &[ix], &[&host, &relayer]), code(E::CreateCooldown)); }
+    advance(&mut svm, CREATE_COOLDOWN_SECS);
+    { let ix = ix_rematch_create(&svm, &game, old, &host.pubkey(), &relayer.pubkey(), Some(r1), r2); assert!(send(&mut svm, &[ix], &[&host, &relayer]).is_err(), "window (60s) is over by now"); }
 }
 
 #[test]

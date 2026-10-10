@@ -118,7 +118,7 @@ pub fn handle_rematch_create(ctx: Context<RematchCreate>) -> Result<()> {
         player,
         now,
     )?;
-    record_room_created(&mut a.claim, now); // not cooled down (see record_room_created)
+    mark_rematch_created(&mut a.claim, a.old_room.phase_since, now)?; // first rematch after the game: no cooldown
     enter_room(&mut a.claim, &room.room_ref(), now);
     a.old_room.rematch_room_id = Some(room.room_id);
     write_room(&new_room, &room)?;
