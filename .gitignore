@@ -7,3 +7,4 @@ test-ledger/
 .DS_Store
 dist/
 .wrangler/
+*-keypair.json

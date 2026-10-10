@@ -257,7 +257,8 @@ pub fn emit_room_created(room: &Room, rematch_of: Option<u64>, now: i64) {
     });
 }
 
-/// Every ix that creates a room calls this first (n1): one create per CREATE_COOLDOWN_SECS per player.
+/// n1: one create per CREATE_COOLDOWN_SECS per player. Call it AFTER the retryable race checks
+/// (pointer / counter / rematch) so a racing client still gets StaleMatchmaker / StaleRematch (Opus gate n2).
 pub fn mark_room_created(claim: &mut PlayerClaim, now: i64) -> Result<()> {
     require!(
         claim.last_created_at == 0 || now >= claim.last_created_at.saturating_add(CREATE_COOLDOWN_SECS),

@@ -111,3 +111,18 @@ fn join_room_also_resets_the_idle_clock() {
     advance(&mut svm, 20);
     { let ix = ix_close_claim(&svm, &p.pubkey(), &p.pubkey()); assert_err(&crank(&mut svm, ix), code(E::ClaimNotIdle)); }
 }
+
+#[test]
+fn close_claim_with_forged_prev_room_is_rejected() {
+    let (mut svm, g) = game_world();
+    let game = g.program;
+    let (a, b) = (player(&mut svm), player(&mut svm));
+    let ra = create_room(&mut svm, &game, &a);
+    let rb = create_room(&mut svm, &game, &b);
+    advance(&mut svm, CLAIM_IDLE_SECS);
+    // claim points at ra; pass rb (a terminal-looking or other room) to fake "dead"
+    let mut ix = ix_close_claim(&svm, &a.pubkey(), &a.pubkey());
+    ix.accounts[2].pubkey = room_pda(&game, rb);
+    assert_err(&crank(&mut svm, ix), code(E::PrevRoomMismatch));
+    let _ = ra;
+}

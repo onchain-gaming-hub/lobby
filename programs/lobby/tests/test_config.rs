@@ -17,8 +17,20 @@ fn init_lobby_writes_config_and_matchmaker() {
     assert_eq!(c.ttl, default_params().ttl);
     let m: Matchmaker = read(&svm, &matchmaker_pda(&game));
     assert_eq!((m.next_room_id, m.open_public_room), (1, None));
-    // owner paid (not anyone else)
-    assert!(lamports(&svm, &g.owner.pubkey()) < 100 * SOL);
+    let _ = g;
+}
+
+#[test]
+fn owner_pays_exactly_config_plus_matchmaker_rent() {
+    let mut svm = new_svm();
+    let game = Pubkey::new_unique();
+    let owner = funded(&mut svm);
+    let fee_payer = funded(&mut svm); // separate, so the owner's delta is rent only
+    put_game_entry(&mut svm, &game, &owner.pubkey(), false);
+    let before = lamports(&svm, &owner.pubkey());
+    ok(send(&mut svm, &[ix_init_lobby(&game, &owner.pubkey(), default_params())], &[&fee_payer, &owner]));
+    let rent = svm.minimum_balance_for_rent_exemption(109) + svm.minimum_balance_for_rent_exemption(43);
+    assert_eq!(before - lamports(&svm, &owner.pubkey()), rent);
 }
 
 #[test]

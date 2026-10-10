@@ -87,3 +87,16 @@ fn leave_seat_frees_the_claim_keeps_the_seat_and_last_one_abandons() {
     let r = room(&svm, &game, id);
     assert_eq!((r.phase, r.end_reason), (Phase::Cancelled, EndReason::Abandoned));
 }
+
+#[test]
+fn end_match_after_lobby_cancelled_is_wrong_phase() {
+    // 03 §3 point 5: the game must read Room.phase before end_match — lobby can cancel on its own
+    let (mut svm, g) = game_world();
+    let game = g.program;
+    let (id, host, other) = starting_room(&mut svm, &game);
+    ok(crank(&mut svm, ix_start_game(&game, id)));
+    ok(send(&mut svm, &[ix_leave_seat(&game, id, &host.pubkey())], &[&host]));
+    ok(send(&mut svm, &[ix_leave_seat(&game, id, &other.pubkey())], &[&other]));
+    assert_eq!(room(&svm, &game, id).end_reason, EndReason::Abandoned);
+    assert_err(&crank(&mut svm, ix_finish_game(&game, id, true)), code(E::WrongPhase));
+}
