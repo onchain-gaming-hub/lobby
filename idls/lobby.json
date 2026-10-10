@@ -1764,6 +1764,11 @@
       "code": 6032,
       "name": "ClaimNotIdle",
       "msg": "Claim has not been idle for CLAIM_IDLE_SECS yet"
+    },
+    {
+      "code": 6033,
+      "name": "CreateCooldown",
+      "msg": "Created a room too recently — wait CREATE_COOLDOWN_SECS"
     }
   ],
   "types": [
@@ -2327,11 +2332,18 @@
             }
           },
           {
+            "name": "last_created_at",
+            "docs": [
+              "n1: last room this player created (CREATE_COOLDOWN_SECS) · 0 = never. Took 8 B of `reserved`."
+            ],
+            "type": "i64"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                16
+                8
               ]
             }
           }

@@ -191,5 +191,7 @@ pub struct PlayerClaim {
     // ── variable offsets ──
     pub current: Option<RoomRef>,
     pub kick: Option<KickMark>,
-    pub reserved: [u8; 16],
+    /// n1: last room this player created (CREATE_COOLDOWN_SECS) · 0 = never. Took 8 B of `reserved`.
+    pub last_created_at: i64,
+    pub reserved: [u8; 8],
 }

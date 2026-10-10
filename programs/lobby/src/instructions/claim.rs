@@ -31,6 +31,7 @@ pub fn handle_init_claim(ctx: Context<InitClaim>) -> Result<()> {
     c.last_joined_at = now;
     c.current = None;
     c.kick = None;
+    c.last_created_at = 0;
     emit!(ClaimCreated { player: c.player, rent_payer: c.rent_payer, at: now });
     Ok(())
 }

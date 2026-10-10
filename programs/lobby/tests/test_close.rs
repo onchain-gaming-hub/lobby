@@ -97,3 +97,17 @@ fn close_claim_blocked_during_kick_cooldown() {
     advance(&mut svm, KICK_COOLDOWN_SECS);
     { let ix = ix_close_claim(&svm, &b.pubkey(), &b.pubkey()); ok(crank(&mut svm, ix)); }
 }
+
+#[test]
+fn join_room_also_resets_the_idle_clock() {
+    let (mut svm, g) = game_world();
+    let game = g.program;
+    let (host, p) = (player(&mut svm), player(&mut svm));
+    advance(&mut svm, CLAIM_IDLE_SECS - 10);
+    let id = create_room(&mut svm, &game, &host);
+    join(&mut svm, &game, id, &p);
+    assert_eq!(read::<PlayerClaim>(&svm, &claim_pda(&p.pubkey())).last_joined_at, now(&svm));
+    ok(send(&mut svm, &[ix_leave_room(&game, id, &p.pubkey(), false)], &[&p]));
+    advance(&mut svm, 20);
+    { let ix = ix_close_claim(&svm, &p.pubkey(), &p.pubkey()); assert_err(&crank(&mut svm, ix), code(E::ClaimNotIdle)); }
+}

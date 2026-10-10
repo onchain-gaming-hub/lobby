@@ -78,7 +78,8 @@ fn claim_offsets_and_full_size() {
         last_joined_at: 333,
         current: Some(r),
         kick: Some(KickMark { room: r, until: 444 }),
-        reserved: [0; 16],
+        last_created_at: 555,
+        reserved: [0; 8],
     };
     let d = ser(&claim);
     assert_eq!(d.len(), 8 + PlayerClaim::INIT_SPACE);

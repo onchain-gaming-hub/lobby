@@ -71,4 +71,6 @@ pub enum LobbyError {
     WrongRoom,
     #[msg("Claim has not been idle for CLAIM_IDLE_SECS yet")]
     ClaimNotIdle,
+    #[msg("Created a room too recently — wait CREATE_COOLDOWN_SECS")]
+    CreateCooldown,
 }

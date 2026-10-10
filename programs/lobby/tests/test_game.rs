@@ -18,6 +18,7 @@ fn full_private_flow_through_mock_game_cpi() {
     let r = room(&svm, &game, id);
     assert_eq!((r.phase, r.end_reason), (Phase::Ended, EndReason::Completed));
     // claims die with the terminal room — both can start something new
+    advance(&mut svm, CREATE_COOLDOWN_SECS); // host created the first room (n1 cooldown)
     create_room(&mut svm, &game, &host);
     create_room(&mut svm, &game, &other);
 }

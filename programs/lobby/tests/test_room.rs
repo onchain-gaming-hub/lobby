@@ -280,3 +280,51 @@ fn room_pda_already_holding_full_rent_costs_payer_nothing() {
     let r = room(&svm, &game, 1);
     assert_eq!((r.rent_payer, r.phase), (relayer.pubkey(), Phase::Waiting)); // donation goes to rent_payer on close
 }
+
+#[test]
+fn create_cooldown_one_room_per_window_per_player() {
+    let (mut svm, game) = world();
+    let (a, host) = (player(&mut svm), player(&mut svm));
+    let id = create_room(&mut svm, &game, &a);
+    ok(send(&mut svm, &[ix_leave_room(&game, id, &a.pubkey(), false)], &[&a]));
+    advance(&mut svm, CREATE_COOLDOWN_SECS - 1);
+    let r = { let ix = ix_create_room(&svm, &game, &a.pubkey(), &a.pubkey(), next_room_id(&svm, &game)); send(&mut svm, &[ix], &[&a]) };
+    assert_err(&r, code(E::CreateCooldown));
+    // joining someone else's room is not limited
+    let other = create_room(&mut svm, &game, &host);
+    join(&mut svm, &game, other, &a);
+    ok(send(&mut svm, &[ix_leave_room(&game, other, &a.pubkey(), false)], &[&a]));
+    advance(&mut svm, 1);
+    create_room(&mut svm, &game, &a);
+}
+
+#[test]
+fn existing_private_room_stays_joinable_after_mode_off_or_suspend() {
+    let (mut svm, game) = world();
+    let (h, b, c) = (player(&mut svm), player(&mut svm), player(&mut svm));
+    let id = create_room(&mut svm, &game, &h);
+    let owner = funded(&mut svm);
+    // owner turns private mode off → only creation is gated
+    put_game_entry(&mut svm, &game, &owner.pubkey(), false);
+    let mut p = default_params();
+    p.private_enabled = false;
+    ok(send(&mut svm, &[ix_update_config(&game, &owner.pubkey(), p)], &[&owner]));
+    join(&mut svm, &game, id, &b);
+    // game suspended → existing rooms still joinable (Active only gates creation)
+    put_game_entry(&mut svm, &game, &owner.pubkey(), true);
+    join(&mut svm, &game, id, &c);
+}
+
+#[test]
+fn join_room_refuses_public_rooms() {
+    let (mut svm, game) = world();
+    let (h, b) = (player(&mut svm), player(&mut svm));
+    let id = create_room(&mut svm, &game, &h);
+    // inject is_public = true (P4 will create real ones)
+    let addr = room_pda(&game, id);
+    let mut acc = svm.get_account(&addr).unwrap();
+    acc.data[84] = 1;
+    svm.set_account(addr, acc).unwrap();
+    let r = { let ix = ix_join_room(&svm, &game, id, &b.pubkey()); send(&mut svm, &[ix], &[&b]) };
+    assert_err(&r, code(E::ModeDisabled));
+}

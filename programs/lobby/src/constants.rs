@@ -19,6 +19,9 @@ pub const KICK_COOLDOWN_SECS: i64 = 10;
 /// L13 (c) · maintainer 2026-10-10: a claim may be closed (by anyone, incl. its owner) only after this long
 /// since `last_joined_at` — the relayer's rent *budget* is not refunded on close, so early closes would burn it.
 pub const CLAIM_IDLE_SECS: i64 = 30 * 86_400;
+/// n1 · maintainer 2026-10-10: one player may create at most one room per this window (create → leave → create
+/// loops burn the relayer's non-refundable rent budget). Sybils are capped at the relayer (per-user rent quota).
+pub const CREATE_COOLDOWN_SECS: i64 = 60;
 
 // ── B2 caps (maintainer 2026-10-10 · L8) — a game owner cannot exceed these ──
 /// ReadyCheck: players cannot leave → bounds how long a player can be frozen.

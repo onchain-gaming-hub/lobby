@@ -94,5 +94,16 @@ fn r2_no_instruction_takes_a_rent_payer_argument() {
             assert!(!name.contains("rent_payer") && !name.contains("payer"), "{}: arg {name}", ix["name"]);
             assert_ne!(arg["type"], serde_json::json!("pubkey"), "{}: pubkey arg {name} — destinations must come from accounts", ix["name"]);
         }
+        let ixn = ix["name"].as_str().unwrap();
+        for acc in ix["accounts"].as_array().unwrap() {
+            let an = acc["name"].as_str().unwrap();
+            if an == "payer" {
+                // the rent source must be a writable signer (relayer payer slot)
+                assert_eq!((acc["signer"].as_bool(), acc["writable"].as_bool()), (Some(true), Some(true)), "{ixn}.payer");
+            }
+            if an == "rent_payer" {
+                assert!(["close_room", "close_claim"].contains(&ixn), "{ixn} takes a rent_payer account");
+            }
+        }
     }
 }

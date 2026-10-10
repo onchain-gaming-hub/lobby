@@ -257,7 +257,17 @@ pub fn emit_room_created(room: &Room, rematch_of: Option<u64>, now: i64) {
     });
 }
 
-/// The ONLY place that points a claim at a room. Every entry ix must go through here so
+/// Every ix that creates a room calls this first (n1): one create per CREATE_COOLDOWN_SECS per player.
+pub fn mark_room_created(claim: &mut PlayerClaim, now: i64) -> Result<()> {
+    require!(
+        claim.last_created_at == 0 || now >= claim.last_created_at.saturating_add(CREATE_COOLDOWN_SECS),
+        LobbyError::CreateCooldown
+    );
+    claim.last_created_at = now;
+    Ok(())
+}
+
+/// After `init_claim`, the ONLY place that points a claim at a room. Every entry ix must go through here so
 /// `last_joined_at` (the L13 (c) idle clock) can never be forgotten (Opus gate review n3).
 pub fn enter_room(claim: &mut PlayerClaim, room: &RoomRef, now: i64) {
     claim.current = Some(*room);
