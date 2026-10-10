@@ -1,0 +1,122 @@
+//! Shared LiteSVM harness. platform-core `GameEntry` is written directly (owner = platform-core ID,
+//! layout from idls/platform_core.json) — lobby only *reads* it, so platform-core is not loaded.
+#![allow(dead_code, clippy::result_large_err, clippy::too_many_arguments)]
+
+use {
+    ::lobby::*,
+    anchor_lang::{prelude::Pubkey, AccountDeserialize},
+    litesvm::{types::TransactionResult, LiteSVM},
+    solana_account::Account,
+    solana_keypair::Keypair,
+    solana_message::{Message, VersionedMessage},
+    solana_signer::Signer,
+    solana_transaction::versioned::VersionedTransaction,
+};
+
+pub const SOL: u64 = 1_000_000_000;
+pub const PC: Pubkey = ::lobby::platform_core::ID;
+const GAME_ENTRY_DISC: [u8; 8] = [119, 212, 18, 192, 14, 188, 27, 149];
+
+pub fn program_so(name: &str) -> Vec<u8> {
+    let path = format!("{}/../deploy/{name}.so", env!("CARGO_TARGET_TMPDIR"));
+    std::fs::read(&path).unwrap_or_else(|e| panic!("{path}: {e} — build first: ./scripts/test.sh"))
+}
+
+pub fn pda(seeds: &[&[u8]], program: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(seeds, program).0
+}
+pub fn game_authority(game: &Pubkey) -> Pubkey {
+    pda(&[GAME_AUTHORITY_SEED], game)
+}
+pub fn game_entry_pda(game: &Pubkey) -> Pubkey {
+    pda(&[PC_GAME_SEED, game.as_ref()], &PC)
+}
+pub fn config_pda(game: &Pubkey) -> Pubkey {
+    pda(&[LOBBY_CONFIG_SEED, game.as_ref()], &::lobby::ID)
+}
+pub fn matchmaker_pda(game: &Pubkey) -> Pubkey {
+    pda(&[MATCHMAKER_SEED, game.as_ref()], &::lobby::ID)
+}
+pub fn room_pda(game: &Pubkey, room_id: u64) -> Pubkey {
+    pda(&[ROOM_SEED, game.as_ref(), &room_id.to_le_bytes()], &::lobby::ID)
+}
+pub fn claim_pda(player: &Pubkey) -> Pubkey {
+    pda(&[CLAIM_SEED, player.as_ref()], &::lobby::ID)
+}
+
+pub fn put(svm: &mut LiteSVM, addr: Pubkey, owner: Pubkey, data: Vec<u8>) {
+    let lamports = svm.minimum_balance_for_rent_exemption(data.len());
+    svm.set_account(addr, Account { lamports, data, owner, executable: false, rent_epoch: 0 }).unwrap();
+}
+
+/// platform-core `GameEntry` v1 (01-account-layout-v1 §4 · 220 B).
+pub fn put_game_entry(svm: &mut LiteSVM, game: &Pubkey, owner: &Pubkey, suspended: bool) {
+    let (ga, ga_bump) = Pubkey::find_program_address(&[GAME_AUTHORITY_SEED], game);
+    let bump = Pubkey::find_program_address(&[PC_GAME_SEED, game.as_ref()], &PC).1;
+    let mut d = GAME_ENTRY_DISC.to_vec();
+    d.extend([1, bump, suspended as u8]);
+    d.extend(game.as_ref());
+    d.extend(owner.as_ref());
+    d.extend(ga.as_ref());
+    d.push(ga_bump);
+    d.extend(Pubkey::new_unique().as_ref()); // registered_by
+    d.extend(0i64.to_le_bytes());
+    d.extend(0i64.to_le_bytes());
+    d.extend([0u8; 64]);
+    assert_eq!(d.len(), 220);
+    put(svm, game_entry_pda(game), PC, d);
+}
+
+pub fn funded(svm: &mut LiteSVM) -> Keypair {
+    let kp = Keypair::new();
+    svm.airdrop(&kp.pubkey(), 100 * SOL).unwrap();
+    kp
+}
+
+pub fn send(svm: &mut LiteSVM, ixs: &[anchor_lang::solana_program::instruction::Instruction], signers: &[&Keypair]) -> TransactionResult {
+    let bh = svm.latest_blockhash();
+    let msg = Message::new_with_blockhash(ixs, Some(&signers[0].pubkey()), &bh);
+    let tx = VersionedTransaction::try_new(VersionedMessage::Legacy(msg), signers).unwrap();
+    let res = svm.send_transaction(tx);
+    svm.expire_blockhash();
+    res
+}
+
+pub fn ok(res: TransactionResult) -> litesvm::types::TransactionMetadata {
+    res.unwrap_or_else(|e| panic!("tx failed: {:?}\n{:#?}", e.err, e.meta.logs))
+}
+
+pub fn assert_err(res: &TransactionResult, code: u32) {
+    let e = res.as_ref().expect_err("expected failure");
+    let s = format!("{:?}", e.err);
+    assert!(s.contains(&format!("Custom({code})")), "expected Custom({code}), got {s}\n{:#?}", e.meta.logs);
+}
+
+pub fn lamports(svm: &LiteSVM, a: &Pubkey) -> u64 {
+    svm.get_account(a).map_or(0, |x| x.lamports)
+}
+pub fn gone(svm: &LiteSVM, a: &Pubkey) -> bool {
+    svm.get_account(a).is_none_or(|x| x.data.is_empty() && x.lamports == 0)
+}
+
+pub fn read<T: AccountDeserialize>(svm: &LiteSVM, a: &Pubkey) -> T {
+    let acc = svm.get_account(a).unwrap_or_else(|| panic!("account {a} missing"));
+    T::try_deserialize(&mut &acc.data[..]).unwrap()
+}
+
+pub fn set_time(svm: &mut LiteSVM, unix: i64) {
+    let mut c: anchor_lang::prelude::Clock = svm.get_sysvar();
+    c.unix_timestamp = unix;
+    svm.set_sysvar(&c);
+}
+pub fn now(svm: &LiteSVM) -> i64 {
+    let c: anchor_lang::prelude::Clock = svm.get_sysvar();
+    c.unix_timestamp
+}
+
+pub fn new_svm() -> LiteSVM {
+    let mut svm = LiteSVM::new();
+    svm.add_program(::lobby::ID, &program_so("lobby")).unwrap();
+    set_time(&mut svm, 1_760_000_000);
+    svm
+}
