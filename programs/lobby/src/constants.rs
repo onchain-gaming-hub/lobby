@@ -16,6 +16,9 @@ pub const MAX_SEATS: u8 = 8;
 const _: () = assert!(MAX_SEATS <= 32, "rewards-pool MAX_WINNERS contract");
 /// L1 — a kicked player cannot rejoin the same room for this long.
 pub const KICK_COOLDOWN_SECS: i64 = 10;
+/// L13 (c) · maintainer 2026-10-10: a claim may be closed (by anyone, incl. its owner) only after this long
+/// since `last_joined_at` — the relayer's rent *budget* is not refunded on close, so early closes would burn it.
+pub const CLAIM_IDLE_SECS: i64 = 30 * 86_400;
 
 // ── B2 caps (maintainer 2026-10-10 · L8) — a game owner cannot exceed these ──
 /// ReadyCheck: players cannot leave → bounds how long a player can be frozen.

@@ -132,10 +132,12 @@ pub struct CloseClaim<'info> {
     pub prev_room: Option<UncheckedAccount<'info>>,
 }
 
-/// Anyone (maintainer 2026-10-10 · L13). Lobby Worker only does this after CLAIM_IDLE (04 §3) — policy, not a rule.
+/// Anyone (L13) — but only after CLAIM_IDLE_SECS of no joins (L13 (c) · maintainer 2026-10-10): closing earlier
+/// would force a fresh `init_claim` on the player's next join and burn the relayer's rent budget (SKILL §3.11).
 pub fn handle_close_claim(ctx: Context<CloseClaim>) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;
     let a = ctx.accounts;
+    require!(now >= a.claim.last_joined_at.saturating_add(CLAIM_IDLE_SECS), LobbyError::ClaimNotIdle);
     let prev = a.prev_room.as_ref().map(|p| p.to_account_info());
     require!(!claim_is_live(&a.claim, prev.as_ref())?, LobbyError::ClaimLive);
     // close + re-init must not wipe an active kick mark (round-1 review B1)

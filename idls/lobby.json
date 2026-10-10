@@ -1759,6 +1759,11 @@
       "code": 6031,
       "name": "WrongRoom",
       "msg": "Room account is not the expected PDA"
+    },
+    {
+      "code": 6032,
+      "name": "ClaimNotIdle",
+      "msg": "Claim has not been idle for CLAIM_IDLE_SECS yet"
     }
   ],
   "types": [

@@ -34,13 +34,19 @@ fn close_room_after_retention_refunds_rent_payer_anyone_can_call() {
 }
 
 #[test]
-fn close_claim_rules_and_refund() {
-    let (mut svm, g) = game_world();
-    let game = g.program;
+fn close_claim_only_after_claim_idle_then_refunds_rent_payer() {
+    let (mut svm, _g) = game_world();
     let relayer = funded(&mut svm);
     let p = funded(&mut svm);
     ok(send(&mut svm, &[ix_init_claim(&p.pubkey(), &relayer.pubkey())], &[&p, &relayer]));
-    // never joined (current = None, prev = placeholder) → closable
+    // L13 (c): nobody — not even the owner — before CLAIM_IDLE_SECS since last_joined_at
+    advance(&mut svm, CLAIM_IDLE_SECS - 1);
+    { let ix = ix_close_claim(&svm, &p.pubkey(), &relayer.pubkey()); assert_err(&send(&mut svm, &[ix], &[&p]), code(E::ClaimNotIdle)); }
+    advance(&mut svm, 1);
+    // R3: wrong rent_payer
+    let thief = funded(&mut svm);
+    { let ix = ix_close_claim(&svm, &p.pubkey(), &thief.pubkey()); assert_err(&send(&mut svm, &[ix], &[&thief]), HAS_ONE); }
+    // never joined (current = None, prev = placeholder) → closable by anyone once idle
     let claim_lamports = lamports(&svm, &claim_pda(&p.pubkey()));
     let before = lamports(&svm, &relayer.pubkey());
     { let ix = ix_close_claim(&svm, &p.pubkey(), &relayer.pubkey()); ok(crank(&mut svm, ix)); }
@@ -50,26 +56,43 @@ fn close_claim_rules_and_refund() {
     ok(send(&mut svm, &[ix_init_claim(&p.pubkey(), &p.pubkey())], &[&p]));
     let c: PlayerClaim = read(&svm, &claim_pda(&p.pubkey()));
     assert_eq!(c.rent_payer, p.pubkey());
+}
 
-    // live → ClaimLive
-    let id = create_room(&mut svm, &game, &p);
-    { let ix = ix_close_claim(&svm, &p.pubkey(), &p.pubkey()); assert_err(&crank(&mut svm, ix), code(E::ClaimLive)); }
-    // R3: wrong rent_payer
-    let thief = funded(&mut svm);
-    { let ix = ix_close_claim(&svm, &p.pubkey(), &thief.pubkey()); assert_err(&send(&mut svm, &[ix], &[&thief]), HAS_ONE); }
+#[test]
+fn joining_resets_the_idle_clock() {
+    let (mut svm, g) = game_world();
+    let game = g.program;
+    let p = player(&mut svm);
+    advance(&mut svm, CLAIM_IDLE_SECS - 10);
+    let id = create_room(&mut svm, &game, &p); // last_joined_at = now
     ok(send(&mut svm, &[ix_leave_room(&game, id, &p.pubkey(), false)], &[&p]));
+    advance(&mut svm, 20); // 30d since init, but only 20s since the join
+    { let ix = ix_close_claim(&svm, &p.pubkey(), &p.pubkey()); assert_err(&crank(&mut svm, ix), code(E::ClaimNotIdle)); }
+    advance(&mut svm, CLAIM_IDLE_SECS);
     { let ix = ix_close_claim(&svm, &p.pubkey(), &p.pubkey()); ok(crank(&mut svm, ix)); }
 }
 
 #[test]
+fn idle_but_still_seated_in_an_unticked_room_is_live() {
+    // nobody ticked the room → it is still Waiting after 30 days → claim is live
+    let (mut svm, g) = game_world();
+    let game = g.program;
+    let p = player(&mut svm);
+    create_room(&mut svm, &game, &p);
+    advance(&mut svm, CLAIM_IDLE_SECS);
+    { let ix = ix_close_claim(&svm, &p.pubkey(), &p.pubkey()); assert_err(&crank(&mut svm, ix), code(E::ClaimLive)); }
+}
+
+#[test]
 fn close_claim_blocked_during_kick_cooldown() {
+    // seated 30+ days in an unticked Waiting room, then kicked → idle, dead, but the kick mark is active
     let (mut svm, g) = game_world();
     let game = g.program;
     let (host, b) = (player(&mut svm), player(&mut svm));
     let id = create_room(&mut svm, &game, &host);
     join(&mut svm, &game, id, &b);
+    advance(&mut svm, CLAIM_IDLE_SECS);
     ok(send(&mut svm, &[ix_kick(&game, id, &host.pubkey(), 1, &b.pubkey())], &[&host]));
-    // B's claim is dead (not seated) but the kick mark is active → cannot be wiped by close + re-init
     { let ix = ix_close_claim(&svm, &b.pubkey(), &b.pubkey()); assert_err(&crank(&mut svm, ix), code(E::KickCooldown)); }
     advance(&mut svm, KICK_COOLDOWN_SECS);
     { let ix = ix_close_claim(&svm, &b.pubkey(), &b.pubkey()); ok(crank(&mut svm, ix)); }

@@ -69,4 +69,6 @@ pub enum LobbyError {
     MathOverflow,
     #[msg("Room account is not the expected PDA")]
     WrongRoom,
+    #[msg("Claim has not been idle for CLAIM_IDLE_SECS yet")]
+    ClaimNotIdle,
 }
