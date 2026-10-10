@@ -1046,6 +1046,281 @@
       "args": []
     },
     {
+      "name": "quick_match_create",
+      "discriminator": [
+        159,
+        175,
+        169,
+        24,
+        46,
+        231,
+        197,
+        25
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "game_entry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.game_program",
+                "account": "LobbyConfig"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                138,
+                71,
+                96,
+                15,
+                0,
+                196,
+                171,
+                4,
+                206,
+                249,
+                75,
+                87,
+                204,
+                40,
+                40,
+                12,
+                86,
+                124,
+                28,
+                171,
+                34,
+                62,
+                167,
+                237,
+                189,
+                27,
+                220,
+                238,
+                14,
+                10,
+                70,
+                5
+              ]
+            }
+          }
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  98,
+                  98,
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.game_program",
+                "account": "LobbyConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "matchmaker",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  116,
+                  99,
+                  104,
+                  109,
+                  97,
+                  107,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.game_program",
+                "account": "LobbyConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "claim",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  97,
+                  105,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "prev_room",
+          "optional": true
+        },
+        {
+          "name": "new_room",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "quick_match_join",
+      "discriminator": [
+        200,
+        80,
+        236,
+        215,
+        212,
+        18,
+        211,
+        95
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "signer": true
+        },
+        {
+          "name": "matchmaker",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  116,
+                  99,
+                  104,
+                  109,
+                  97,
+                  107,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.game_program",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.game_program",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "claim",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  97,
+                  105,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "prev_room",
+          "optional": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "ready",
       "discriminator": [
         21,
@@ -1084,6 +1359,313 @@
               {
                 "kind": "account",
                 "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "rematch_create",
+      "discriminator": [
+        210,
+        174,
+        210,
+        34,
+        40,
+        191,
+        135,
+        60
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "game_entry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "old_room.game_program",
+                "account": "Room"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                138,
+                71,
+                96,
+                15,
+                0,
+                196,
+                171,
+                4,
+                206,
+                249,
+                75,
+                87,
+                204,
+                40,
+                40,
+                12,
+                86,
+                124,
+                28,
+                171,
+                34,
+                62,
+                167,
+                237,
+                189,
+                27,
+                220,
+                238,
+                14,
+                10,
+                70,
+                5
+              ]
+            }
+          }
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  98,
+                  98,
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "old_room.game_program",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "matchmaker",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  116,
+                  99,
+                  104,
+                  109,
+                  97,
+                  107,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "old_room.game_program",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "old_room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "old_room.game_program",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "old_room.room_id",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "claim",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  97,
+                  105,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "prev_room",
+          "optional": true
+        },
+        {
+          "name": "rematch_room",
+          "docs": [
+            "(may be closed already, hence Unchecked). Key must be that room's PDA."
+          ],
+          "optional": true
+        },
+        {
+          "name": "new_room",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "rematch_join",
+      "discriminator": [
+        207,
+        161,
+        2,
+        202,
+        129,
+        95,
+        113,
+        172
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "signer": true
+        },
+        {
+          "name": "old_room",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "old_room.game_program",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "old_room.room_id",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "claim",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  97,
+                  105,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "prev_room",
+          "optional": true
+        },
+        {
+          "name": "rematch_room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rematch_room.game_program",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "rematch_room.room_id",
                 "account": "Room"
               }
             ]

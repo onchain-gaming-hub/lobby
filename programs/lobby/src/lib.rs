@@ -53,6 +53,18 @@ pub mod lobby {
     pub fn ready(ctx: Context<Ready>) -> Result<()> {
         instructions::room::handle_ready(ctx)
     }
+    pub fn quick_match_join(ctx: Context<QuickMatchJoin>) -> Result<()> {
+        instructions::public::handle_quick_match_join(ctx)
+    }
+    pub fn quick_match_create(ctx: Context<QuickMatchCreate>) -> Result<()> {
+        instructions::public::handle_quick_match_create(ctx)
+    }
+    pub fn rematch_join(ctx: Context<RematchJoin>) -> Result<()> {
+        instructions::rematch::handle_rematch_join(ctx)
+    }
+    pub fn rematch_create(ctx: Context<RematchCreate>) -> Result<()> {
+        instructions::rematch::handle_rematch_create(ctx)
+    }
 
     // ── host (private rooms) ──
     pub fn add_bot(ctx: Context<HostRoom>, seat: u8) -> Result<()> {

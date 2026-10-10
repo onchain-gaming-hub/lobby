@@ -407,3 +407,114 @@ pub fn events<T: anchor_lang::AnchorDeserialize + anchor_lang::Discriminator>(me
         .map(|d| T::deserialize(&mut &d[T::DISCRIMINATOR.len()..]).unwrap())
         .collect()
 }
+
+// ─────────────────── P4: public + rematch ───────────────────
+
+pub fn pointer(svm: &LiteSVM, game: &Pubkey) -> Option<u64> {
+    read::<Matchmaker>(svm, &matchmaker_pda(game)).open_public_room
+}
+
+/// Invariant 7: the pointer only ever names a public Waiting room with a free seat.
+pub fn assert_pointer_ok(svm: &LiteSVM, game: &Pubkey) {
+    if let Some(id) = pointer(svm, game) {
+        let r = room(svm, game, id);
+        assert!(r.is_public && r.phase == Phase::Waiting && r.lowest_empty().is_some(), "pointer -> room {id} {:?}", r.phase);
+    }
+}
+
+pub fn ix_qm_join(svm: &LiteSVM, game: &Pubkey, room_id: u64, player: &Pubkey) -> Instruction {
+    Instruction {
+        program_id: ::lobby::ID,
+        accounts: ::lobby::accounts::QuickMatchJoin {
+            player: *player,
+            matchmaker: matchmaker_pda(game),
+            room: room_pda(game, room_id),
+            claim: claim_pda(player),
+            prev_room: prev_of(svm, player),
+        }
+        .to_account_metas(None),
+        data: ::lobby::instruction::QuickMatchJoin {}.data(),
+    }
+}
+
+pub fn ix_qm_create(svm: &LiteSVM, game: &Pubkey, player: &Pubkey, payer: &Pubkey, room_id: u64) -> Instruction {
+    Instruction {
+        program_id: ::lobby::ID,
+        accounts: ::lobby::accounts::QuickMatchCreate {
+            player: *player,
+            payer: *payer,
+            game_entry: game_entry_pda(game),
+            config: config_pda(game),
+            matchmaker: matchmaker_pda(game),
+            claim: claim_pda(player),
+            prev_room: prev_of(svm, player),
+            new_room: room_pda(game, room_id),
+            system_program: anchor_lang::system_program::ID,
+        }
+        .to_account_metas(None),
+        data: ::lobby::instruction::QuickMatchCreate {}.data(),
+    }
+}
+
+/// What a client does: pointer → join, else create. Returns the room id.
+pub fn qm(svm: &mut LiteSVM, game: &Pubkey, p: &Keypair) -> u64 {
+    match pointer(svm, game) {
+        Some(id) => {
+            let ix = ix_qm_join(svm, game, id, &p.pubkey());
+            ok(send(svm, &[ix], &[p]));
+            id
+        }
+        None => {
+            let id = next_room_id(svm, game);
+            let ix = ix_qm_create(svm, game, &p.pubkey(), &p.pubkey(), id);
+            ok(send(svm, &[ix], &[p]));
+            id
+        }
+    }
+}
+
+pub fn ix_rematch_join(svm: &LiteSVM, game: &Pubkey, old: u64, player: &Pubkey, rematch: u64) -> Instruction {
+    Instruction {
+        program_id: ::lobby::ID,
+        accounts: ::lobby::accounts::RematchJoin {
+            player: *player,
+            old_room: room_pda(game, old),
+            claim: claim_pda(player),
+            prev_room: prev_of(svm, player),
+            rematch_room: room_pda(game, rematch),
+        }
+        .to_account_metas(None),
+        data: ::lobby::instruction::RematchJoin {}.data(),
+    }
+}
+
+pub fn ix_rematch_create(svm: &LiteSVM, game: &Pubkey, old: u64, player: &Pubkey, payer: &Pubkey, rematch: Option<u64>, new_id: u64) -> Instruction {
+    Instruction {
+        program_id: ::lobby::ID,
+        accounts: ::lobby::accounts::RematchCreate {
+            player: *player,
+            payer: *payer,
+            game_entry: game_entry_pda(game),
+            config: config_pda(game),
+            matchmaker: matchmaker_pda(game),
+            old_room: room_pda(game, old),
+            claim: claim_pda(player),
+            prev_room: prev_of(svm, player),
+            rematch_room: rematch.map(|r| room_pda(game, r)),
+            new_room: room_pda(game, new_id),
+            system_program: anchor_lang::system_program::ID,
+        }
+        .to_account_metas(None),
+        data: ::lobby::instruction::RematchCreate {}.data(),
+    }
+}
+
+/// A completed match (host + other humans · 2 bots). The cooldown has passed during play.
+pub fn ended_room(svm: &mut LiteSVM, game: &Pubkey) -> (u64, Keypair, Keypair) {
+    let (id, host, other) = starting_room(svm, game);
+    ok(crank(svm, ix_start_game(game, id)));
+    advance(svm, CREATE_COOLDOWN_SECS);
+    ok(crank(svm, ix_finish_game(game, id, true)));
+    assert_eq!(room(svm, game, id).phase, Phase::Ended);
+    (id, host, other)
+}

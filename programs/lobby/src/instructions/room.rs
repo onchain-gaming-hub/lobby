@@ -43,7 +43,6 @@ pub fn handle_create_room(ctx: Context<CreateRoom>) -> Result<()> {
     require!(a.config.private_enabled, LobbyError::ModeDisabled);
     let prev = a.prev_room.as_ref().map(|p| p.to_account_info());
     require_claim_free(&a.claim, prev.as_ref())?;
-    mark_room_created(&mut a.claim, now)?;
     let player = a.player.key();
     let new_room = a.new_room.to_account_info();
     let room = create_room_account(
@@ -56,7 +55,8 @@ pub fn handle_create_room(ctx: Context<CreateRoom>) -> Result<()> {
         Some(player),
         player,
         now,
-    )?;
+    )?; // StaleMatchmaker (retryable) is checked inside, before the cooldown
+    mark_room_created(&mut a.claim, now)?;
     enter_room(&mut a.claim, &room.room_ref(), now);
     write_room(&new_room, &room)?;
     emit_room_created(&room, None, now);
