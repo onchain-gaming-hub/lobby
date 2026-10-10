@@ -120,3 +120,75 @@ pub fn new_svm() -> LiteSVM {
     set_time(&mut svm, 1_760_000_000);
     svm
 }
+
+// ─────────────────── instruction builders ───────────────────
+use anchor_lang::{solana_program::instruction::Instruction, InstructionData, ToAccountMetas};
+
+pub fn code(e: ::lobby::errors::LobbyError) -> u32 {
+    anchor_lang::error::ERROR_CODE_OFFSET + e as u32
+}
+
+pub fn default_params() -> ConfigParams {
+    ConfigParams {
+        max_seats: 4,
+        min_seats: 4,
+        min_humans: 1,
+        public_enabled: true,
+        private_enabled: true,
+        bot_fill: true,
+        rematch_enabled: true,
+        ttl: RoomTtl { wait: 60, ready: 30, lobby: 1800, start: 60, max_game: 3600, rematch_window: 60, retention: 600 },
+    }
+}
+
+pub fn ix_init_lobby(game: &Pubkey, owner: &Pubkey, params: ConfigParams) -> Instruction {
+    Instruction {
+        program_id: ::lobby::ID,
+        accounts: ::lobby::accounts::InitLobby {
+            owner: *owner,
+            game_program: *game,
+            game_entry: game_entry_pda(game),
+            config: config_pda(game),
+            matchmaker: matchmaker_pda(game),
+            system_program: anchor_lang::system_program::ID,
+        }
+        .to_account_metas(None),
+        data: ::lobby::instruction::InitLobby { params }.data(),
+    }
+}
+
+pub fn ix_update_config(game: &Pubkey, owner: &Pubkey, params: ConfigParams) -> Instruction {
+    Instruction {
+        program_id: ::lobby::ID,
+        accounts: ::lobby::accounts::UpdateConfig { owner: *owner, game_entry: game_entry_pda(game), config: config_pda(game) }
+            .to_account_metas(None),
+        data: ::lobby::instruction::UpdateConfig { params }.data(),
+    }
+}
+
+pub fn ix_init_claim(player: &Pubkey, payer: &Pubkey) -> Instruction {
+    Instruction {
+        program_id: ::lobby::ID,
+        accounts: ::lobby::accounts::InitClaim {
+            player: *player,
+            payer: *payer,
+            claim: claim_pda(player),
+            system_program: anchor_lang::system_program::ID,
+        }
+        .to_account_metas(None),
+        data: ::lobby::instruction::InitClaim {}.data(),
+    }
+}
+
+/// A game registered in platform-core (Active) with its lobby initialised by `owner`.
+pub struct Game {
+    pub program: Pubkey,
+    pub owner: Keypair,
+}
+
+pub fn setup_game(svm: &mut LiteSVM, program: Pubkey, params: ConfigParams) -> Game {
+    let owner = funded(svm);
+    put_game_entry(svm, &program, &owner.pubkey(), false);
+    ok(send(svm, &[ix_init_lobby(&program, &owner.pubkey(), params)], &[&owner]));
+    Game { program, owner }
+}

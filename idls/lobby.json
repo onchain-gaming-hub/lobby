@@ -6,5 +6,1521 @@
     "spec": "0.1.0",
     "description": "lobby — rooms / matchmaking / readyCheck / rematch for blockchain-games-hub (specs/designs/)"
   },
-  "instructions": []
+  "instructions": [
+    {
+      "name": "init_claim",
+      "discriminator": [
+        48,
+        91,
+        228,
+        62,
+        170,
+        18,
+        4,
+        19
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Relayer (social login) or the player — the only source of the claim's rent (R2)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "claim",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  97,
+                  105,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "init_lobby",
+      "discriminator": [
+        187,
+        106,
+        186,
+        28,
+        249,
+        222,
+        145,
+        128
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "docs": [
+            "Game owner — pays rent for config + matchmaker with their own wallet (not the relayer)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "game_program"
+        },
+        {
+          "name": "game_entry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game_program"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                138,
+                71,
+                96,
+                15,
+                0,
+                196,
+                171,
+                4,
+                206,
+                249,
+                75,
+                87,
+                204,
+                40,
+                40,
+                12,
+                86,
+                124,
+                28,
+                171,
+                34,
+                62,
+                167,
+                237,
+                189,
+                27,
+                220,
+                238,
+                14,
+                10,
+                70,
+                5
+              ]
+            }
+          }
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  98,
+                  98,
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game_program"
+              }
+            ]
+          }
+        },
+        {
+          "name": "matchmaker",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  116,
+                  99,
+                  104,
+                  109,
+                  97,
+                  107,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game_program"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "ConfigParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "update_config",
+      "discriminator": [
+        29,
+        158,
+        252,
+        191,
+        10,
+        83,
+        219,
+        99
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true
+        },
+        {
+          "name": "game_entry",
+          "docs": [
+            "Not checked for Active — config changes only affect rooms created later (snapshot)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.game_program",
+                "account": "LobbyConfig"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                138,
+                71,
+                96,
+                15,
+                0,
+                196,
+                171,
+                4,
+                206,
+                249,
+                75,
+                87,
+                204,
+                40,
+                40,
+                12,
+                86,
+                124,
+                28,
+                171,
+                34,
+                62,
+                167,
+                237,
+                189,
+                27,
+                220,
+                238,
+                14,
+                10,
+                70,
+                5
+              ]
+            }
+          }
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  98,
+                  98,
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.game_program",
+                "account": "LobbyConfig"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "ConfigParams"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "LobbyConfig",
+      "discriminator": [
+        104,
+        10,
+        252,
+        59,
+        75,
+        85,
+        242,
+        250
+      ]
+    },
+    {
+      "name": "Matchmaker",
+      "discriminator": [
+        233,
+        235,
+        115,
+        207,
+        237,
+        67,
+        214,
+        243
+      ]
+    },
+    {
+      "name": "PlayerClaim",
+      "discriminator": [
+        157,
+        68,
+        96,
+        64,
+        148,
+        64,
+        107,
+        254
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "ClaimClosed",
+      "discriminator": [
+        73,
+        155,
+        63,
+        71,
+        195,
+        114,
+        28,
+        232
+      ]
+    },
+    {
+      "name": "ClaimCreated",
+      "discriminator": [
+        12,
+        137,
+        189,
+        74,
+        127,
+        86,
+        118,
+        130
+      ]
+    },
+    {
+      "name": "HostChanged",
+      "discriminator": [
+        90,
+        110,
+        21,
+        113,
+        221,
+        28,
+        180,
+        87
+      ]
+    },
+    {
+      "name": "LobbyConfigUpdated",
+      "discriminator": [
+        40,
+        88,
+        26,
+        155,
+        216,
+        55,
+        145,
+        202
+      ]
+    },
+    {
+      "name": "LobbyInitialized",
+      "discriminator": [
+        244,
+        243,
+        51,
+        87,
+        176,
+        183,
+        188,
+        224
+      ]
+    },
+    {
+      "name": "MatchmakerPointer",
+      "discriminator": [
+        65,
+        134,
+        175,
+        114,
+        32,
+        238,
+        139,
+        236
+      ]
+    },
+    {
+      "name": "PhaseChanged",
+      "discriminator": [
+        178,
+        201,
+        67,
+        222,
+        208,
+        36,
+        213,
+        219
+      ]
+    },
+    {
+      "name": "PlayerLeftSeat",
+      "discriminator": [
+        240,
+        109,
+        250,
+        133,
+        200,
+        56,
+        163,
+        213
+      ]
+    },
+    {
+      "name": "PlayerReady",
+      "discriminator": [
+        91,
+        36,
+        30,
+        206,
+        51,
+        189,
+        35,
+        91
+      ]
+    },
+    {
+      "name": "RoomClosed",
+      "discriminator": [
+        150,
+        23,
+        85,
+        195,
+        169,
+        114,
+        30,
+        88
+      ]
+    },
+    {
+      "name": "RoomCreated",
+      "discriminator": [
+        9,
+        177,
+        128,
+        166,
+        26,
+        19,
+        14,
+        243
+      ]
+    },
+    {
+      "name": "SeatChanged",
+      "discriminator": [
+        58,
+        29,
+        80,
+        166,
+        140,
+        222,
+        63,
+        76
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "StaleMatchmaker",
+      "msg": "Matchmaker changed (pointer or next_room_id) — re-read and retry"
+    },
+    {
+      "code": 6001,
+      "name": "StaleRematch",
+      "msg": "Rematch pointer changed or rematch room not joinable — re-read and retry"
+    },
+    {
+      "code": 6002,
+      "name": "RoomFull",
+      "msg": "Room is full"
+    },
+    {
+      "code": 6003,
+      "name": "NotWaiting",
+      "msg": "Room is not in Waiting"
+    },
+    {
+      "code": 6004,
+      "name": "PrevRoomRequired",
+      "msg": "prev_room is required (claim points at a room)"
+    },
+    {
+      "code": 6005,
+      "name": "PrevRoomMismatch",
+      "msg": "prev_room is not the room the claim points at"
+    },
+    {
+      "code": 6006,
+      "name": "ClaimLive",
+      "msg": "Claim is still live (player is in a room)"
+    },
+    {
+      "code": 6007,
+      "name": "AlreadyInRoom",
+      "msg": "Player is already in a room"
+    },
+    {
+      "code": 6008,
+      "name": "GameNotActive",
+      "msg": "Game is not Active in platform-core"
+    },
+    {
+      "code": 6009,
+      "name": "ModeDisabled",
+      "msg": "This mode is disabled for the game"
+    },
+    {
+      "code": 6010,
+      "name": "WrongPhase",
+      "msg": "Wrong phase for this instruction"
+    },
+    {
+      "code": 6011,
+      "name": "NotInRoom",
+      "msg": "Caller is not in this room"
+    },
+    {
+      "code": 6012,
+      "name": "NotHost",
+      "msg": "Only the host can do this"
+    },
+    {
+      "code": 6013,
+      "name": "PublicNoHostControl",
+      "msg": "Public rooms have no host controls"
+    },
+    {
+      "code": 6014,
+      "name": "NotAHuman",
+      "msg": "Seat is not a human"
+    },
+    {
+      "code": 6015,
+      "name": "CannotKickSelf",
+      "msg": "Host cannot kick themselves"
+    },
+    {
+      "code": 6016,
+      "name": "SeatNotEmpty",
+      "msg": "Seat is not empty"
+    },
+    {
+      "code": 6017,
+      "name": "SeatNotBot",
+      "msg": "Seat is not a bot"
+    },
+    {
+      "code": 6018,
+      "name": "BotsDisabled",
+      "msg": "Bots are disabled for this game"
+    },
+    {
+      "code": 6019,
+      "name": "KickCooldown",
+      "msg": "Kicked from this room recently — wait for the cooldown"
+    },
+    {
+      "code": 6020,
+      "name": "NotEnoughSeats",
+      "msg": "Not enough occupied seats to start"
+    },
+    {
+      "code": 6021,
+      "name": "NotEnoughHumans",
+      "msg": "Not enough humans to start"
+    },
+    {
+      "code": 6022,
+      "name": "RematchClosed",
+      "msg": "Rematch window is closed"
+    },
+    {
+      "code": 6023,
+      "name": "NotInRoster",
+      "msg": "Caller was not in the old room's roster"
+    },
+    {
+      "code": 6024,
+      "name": "MatchmakerRequired",
+      "msg": "Matchmaker account is required for public rooms"
+    },
+    {
+      "code": 6025,
+      "name": "RetentionNotReached",
+      "msg": "Room retention period has not passed"
+    },
+    {
+      "code": 6026,
+      "name": "BadGameAuthority",
+      "msg": "Signer is not the game's game_authority PDA"
+    },
+    {
+      "code": 6027,
+      "name": "InvalidConfig",
+      "msg": "Invalid lobby config"
+    },
+    {
+      "code": 6028,
+      "name": "NotGameOwner",
+      "msg": "Signer is not GameEntry.owner"
+    },
+    {
+      "code": 6029,
+      "name": "InvalidSeat",
+      "msg": "Seat index out of range"
+    },
+    {
+      "code": 6030,
+      "name": "MathOverflow",
+      "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6031,
+      "name": "WrongRoom",
+      "msg": "Room account is not the expected PDA"
+    }
+  ],
+  "types": [
+    {
+      "name": "ClaimClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "refunded_to",
+            "type": "pubkey"
+          },
+          {
+            "name": "lamports",
+            "type": "u64"
+          },
+          {
+            "name": "at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ClaimCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "rent_payer",
+            "type": "pubkey"
+          },
+          {
+            "name": "at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConfigParams",
+      "docs": [
+        "Config the game owner sets (`init_lobby` / `update_config`)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "max_seats",
+            "type": "u8"
+          },
+          {
+            "name": "min_seats",
+            "type": "u8"
+          },
+          {
+            "name": "min_humans",
+            "type": "u8"
+          },
+          {
+            "name": "public_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "private_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "bot_fill",
+            "type": "bool"
+          },
+          {
+            "name": "rematch_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "ttl",
+            "type": {
+              "defined": {
+                "name": "RoomTtl"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "EndReason",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "None"
+          },
+          {
+            "name": "Completed"
+          },
+          {
+            "name": "GameCancelled"
+          },
+          {
+            "name": "NoHumans"
+          },
+          {
+            "name": "LobbyExpired"
+          },
+          {
+            "name": "StartExpired"
+          },
+          {
+            "name": "GameExpired"
+          },
+          {
+            "name": "Abandoned"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GameEntry",
+      "docs": [
+        "PDA `[GAME_SEED, game_program]`. Never closed (I4) — only `Suspended`.",
+        "Layout: specs/designs/01 §4 (220 bytes)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "GameStatus"
+              }
+            }
+          },
+          {
+            "name": "game_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "game_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "game_authority_bump",
+            "type": "u8"
+          },
+          {
+            "name": "registered_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "registered_at",
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "type": "i64"
+          },
+          {
+            "name": "_reserved",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "GameStatus",
+      "docs": [
+        "⚠️ Never reorder — the relayer filters `GameEntry` with memcmp(offset 10, 0x00 = Active).",
+        "⚠️ INVARIANT: every explicit value MUST equal its variant index. The IDL carries no",
+        "discriminant values, so `declare_program!` consumers encode the *index*; a gap or",
+        "out-of-order value would silently desync them. Append only, next value = next index",
+        "(guarded by `enum_bytes_frozen_v1` + `enum_byte_equals_declaration_index` and the",
+        "compile-time `enum_tripwire` in tests/test_layout.rs)."
+      ],
+      "repr": {
+        "kind": "rust"
+      },
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Active"
+          },
+          {
+            "name": "Suspended"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HostChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "room_id",
+            "type": "u64"
+          },
+          {
+            "name": "host",
+            "type": "pubkey"
+          },
+          {
+            "name": "at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "KickMark",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "room",
+            "type": {
+              "defined": {
+                "name": "RoomRef"
+              }
+            }
+          },
+          {
+            "name": "until",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LobbyConfig",
+      "docs": [
+        "PDA `[b\"lobby_config\", game_program]` — one per game."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "game_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "max_seats",
+            "type": "u8"
+          },
+          {
+            "name": "min_seats",
+            "type": "u8"
+          },
+          {
+            "name": "min_humans",
+            "type": "u8"
+          },
+          {
+            "name": "public_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "private_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "bot_fill",
+            "type": "bool"
+          },
+          {
+            "name": "rematch_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "ttl",
+            "type": {
+              "defined": {
+                "name": "RoomTtl"
+              }
+            }
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "LobbyConfigUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LobbyInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Matchmaker",
+      "docs": [
+        "PDA `[b\"matchmaker\", game_program]` — one per game. Never closed in v1 (room_id uniqueness)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "next_room_id",
+            "docs": [
+              "Starts at 1 · only `checked_add(1)` in the ix that creates Room `next_room_id`."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "open_public_room",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "MatchmakerPointer",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "open_public_room",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Phase",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Waiting"
+          },
+          {
+            "name": "ReadyCheck"
+          },
+          {
+            "name": "Starting"
+          },
+          {
+            "name": "Playing"
+          },
+          {
+            "name": "Ended"
+          },
+          {
+            "name": "Cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PhaseChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "room_id",
+            "type": "u64"
+          },
+          {
+            "name": "from",
+            "type": {
+              "defined": {
+                "name": "Phase"
+              }
+            }
+          },
+          {
+            "name": "to",
+            "type": {
+              "defined": {
+                "name": "Phase"
+              }
+            }
+          },
+          {
+            "name": "end_reason",
+            "type": {
+              "defined": {
+                "name": "EndReason"
+              }
+            }
+          },
+          {
+            "name": "at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PlayerClaim",
+      "docs": [
+        "PDA `[b\"claim\", player]` — one per player, hub-wide (D8). Created only by `init_claim`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "rent_payer",
+            "docs": [
+              "🔒 R1: written once in `init_claim`, never overwritten."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "last_joined_at",
+            "type": "i64"
+          },
+          {
+            "name": "current",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "RoomRef"
+                }
+              }
+            }
+          },
+          {
+            "name": "kick",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "KickMark"
+                }
+              }
+            }
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PlayerLeftSeat",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "room_id",
+            "type": "u64"
+          },
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "seat",
+            "type": "u8"
+          },
+          {
+            "name": "at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PlayerReady",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "room_id",
+            "type": "u64"
+          },
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoomClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "room_id",
+            "type": "u64"
+          },
+          {
+            "name": "refunded_to",
+            "type": "pubkey"
+          },
+          {
+            "name": "lamports",
+            "type": "u64"
+          },
+          {
+            "name": "at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoomCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "room_id",
+            "type": "u64"
+          },
+          {
+            "name": "is_public",
+            "type": "bool"
+          },
+          {
+            "name": "host",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "rent_payer",
+            "type": "pubkey"
+          },
+          {
+            "name": "rematch_of",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoomRef",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "room_id",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoomTtl",
+      "docs": [
+        "Seconds. Snapshotted into every Room at creation (01 §3)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wait",
+            "type": "u32"
+          },
+          {
+            "name": "ready",
+            "type": "u32"
+          },
+          {
+            "name": "lobby",
+            "type": "u32"
+          },
+          {
+            "name": "start",
+            "type": "u32"
+          },
+          {
+            "name": "max_game",
+            "type": "u32"
+          },
+          {
+            "name": "rematch_window",
+            "type": "u32"
+          },
+          {
+            "name": "retention",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SeatCause",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Join"
+          },
+          {
+            "name": "Leave"
+          },
+          {
+            "name": "Kick"
+          },
+          {
+            "name": "AddBot"
+          },
+          {
+            "name": "RemoveBot"
+          },
+          {
+            "name": "ReadyTimeout"
+          },
+          {
+            "name": "Backfill"
+          },
+          {
+            "name": "Purge"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SeatChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "room_id",
+            "type": "u64"
+          },
+          {
+            "name": "seat",
+            "type": "u8"
+          },
+          {
+            "name": "kind",
+            "type": {
+              "defined": {
+                "name": "SeatKind"
+              }
+            }
+          },
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "cause",
+            "type": {
+              "defined": {
+                "name": "SeatCause"
+              }
+            }
+          },
+          {
+            "name": "at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SeatKind",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Empty"
+          },
+          {
+            "name": "Human"
+          },
+          {
+            "name": "Bot"
+          }
+        ]
+      }
+    }
+  ]
 }

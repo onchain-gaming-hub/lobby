@@ -9,9 +9,15 @@
 use anchor_lang::prelude::*;
 
 pub mod constants;
+pub mod errors;
+pub mod events;
+pub mod instructions;
+pub mod logic;
 pub mod state;
 
 pub use constants::*;
+pub use instructions::*;
+pub use logic::ConfigParams;
 pub use state::*;
 
 declare_id!("5zdBSvep3yV6v1SVD67uw9N5Wb3eT9Hp9D3eg4YSRqRu");
@@ -20,4 +26,19 @@ declare_id!("5zdBSvep3yV6v1SVD67uw9N5Wb3eT9Hp9D3eg4YSRqRu");
 declare_program!(platform_core);
 
 #[program]
-pub mod lobby {}
+pub mod lobby {
+    use super::*;
+
+    // ── game owner (not relayed) ──
+    pub fn init_lobby(ctx: Context<InitLobby>, params: ConfigParams) -> Result<()> {
+        instructions::admin::handle_init_lobby(ctx, params)
+    }
+    pub fn update_config(ctx: Context<UpdateConfig>, params: ConfigParams) -> Result<()> {
+        instructions::admin::handle_update_config(ctx, params)
+    }
+
+    // ── player ──
+    pub fn init_claim(ctx: Context<InitClaim>) -> Result<()> {
+        instructions::claim::handle_init_claim(ctx)
+    }
+}
