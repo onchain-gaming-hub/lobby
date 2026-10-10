@@ -8,6 +8,235 @@
   },
   "instructions": [
     {
+      "name": "add_bot",
+      "discriminator": [
+        33,
+        251,
+        240,
+        162,
+        159,
+        44,
+        51,
+        74
+      ],
+      "accounts": [
+        {
+          "name": "host",
+          "signer": true
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.game_program",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "seat",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "create_room",
+      "discriminator": [
+        130,
+        166,
+        32,
+        2,
+        247,
+        120,
+        178,
+        53
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Relayer or the player — funds the Room rent only (R2 · SKILL v3 (P))."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "game_entry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.game_program",
+                "account": "LobbyConfig"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                138,
+                71,
+                96,
+                15,
+                0,
+                196,
+                171,
+                4,
+                206,
+                249,
+                75,
+                87,
+                204,
+                40,
+                40,
+                12,
+                86,
+                124,
+                28,
+                171,
+                34,
+                62,
+                167,
+                237,
+                189,
+                27,
+                220,
+                238,
+                14,
+                10,
+                70,
+                5
+              ]
+            }
+          }
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  98,
+                  98,
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.game_program",
+                "account": "LobbyConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "matchmaker",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  116,
+                  99,
+                  104,
+                  109,
+                  97,
+                  107,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.game_program",
+                "account": "LobbyConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "claim",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  97,
+                  105,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "prev_room",
+          "optional": true
+        },
+        {
+          "name": "new_room",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "init_claim",
       "discriminator": [
         48,
@@ -215,6 +444,411 @@
       ]
     },
     {
+      "name": "join_room",
+      "discriminator": [
+        95,
+        232,
+        188,
+        81,
+        124,
+        130,
+        78,
+        139
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  98,
+                  98,
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.game_program",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.game_program",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "claim",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  97,
+                  105,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "prev_room",
+          "optional": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "kick_player",
+      "discriminator": [
+        230,
+        225,
+        244,
+        193,
+        58,
+        11,
+        192,
+        199
+      ],
+      "accounts": [
+        {
+          "name": "host",
+          "signer": true
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.game_program",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "victim_claim",
+          "docs": [
+            "The kicked player's claim — carries the L1 cooldown (01 §4)."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  97,
+                  105,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "victim_claim.player",
+                "account": "PlayerClaim"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "seat",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "leave_room",
+      "discriminator": [
+        249,
+        42,
+        239,
+        128,
+        192,
+        20,
+        114,
+        156
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "signer": true
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.game_program",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "matchmaker",
+          "docs": [
+            "Required for public rooms (pointer) · placeholder for private."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  116,
+                  99,
+                  104,
+                  109,
+                  97,
+                  107,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.game_program",
+                "account": "Room"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "ready",
+      "discriminator": [
+        21,
+        117,
+        60,
+        73,
+        96,
+        121,
+        209,
+        75
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "signer": true
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.game_program",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "remove_bot",
+      "discriminator": [
+        49,
+        239,
+        98,
+        212,
+        120,
+        98,
+        225,
+        252
+      ],
+      "accounts": [
+        {
+          "name": "host",
+          "signer": true
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.game_program",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "seat",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "request_start",
+      "discriminator": [
+        140,
+        14,
+        232,
+        85,
+        93,
+        89,
+        1,
+        153
+      ],
+      "accounts": [
+        {
+          "name": "host",
+          "signer": true
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.game_program",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "update_config",
       "discriminator": [
         29,
@@ -373,6 +1007,19 @@
         64,
         107,
         254
+      ]
+    },
+    {
+      "name": "Room",
+      "discriminator": [
+        156,
+        199,
+        67,
+        27,
+        222,
+        23,
+        185,
+        94
       ]
     }
   ],
@@ -1307,6 +1954,126 @@
       }
     },
     {
+      "name": "Room",
+      "docs": [
+        "PDA `[b\"room\", game_program, room_id.to_le_bytes()]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "rent_payer",
+            "docs": [
+              "L3/D11 — `close_room` refunds only here · written once at creation."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "game_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "room_id",
+            "type": "u64"
+          },
+          {
+            "name": "phase",
+            "type": {
+              "defined": {
+                "name": "Phase"
+              }
+            }
+          },
+          {
+            "name": "end_reason",
+            "type": {
+              "defined": {
+                "name": "EndReason"
+              }
+            }
+          },
+          {
+            "name": "is_public",
+            "type": "bool"
+          },
+          {
+            "name": "min_seats",
+            "type": "u8"
+          },
+          {
+            "name": "min_humans",
+            "type": "u8"
+          },
+          {
+            "name": "bot_fill",
+            "type": "bool"
+          },
+          {
+            "name": "rematch_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "ttl",
+            "type": {
+              "defined": {
+                "name": "RoomTtl"
+              }
+            }
+          },
+          {
+            "name": "phase_since",
+            "type": "i64"
+          },
+          {
+            "name": "last_human_activity_at",
+            "type": "i64"
+          },
+          {
+            "name": "host",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "rematch_room_id",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "seats",
+            "docs": [
+              "len = max_seats for the room's whole life (never push/pop)."
+            ],
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "Seat"
+                }
+              }
+            }
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "RoomClosed",
       "type": {
         "kind": "struct",
@@ -1425,6 +2192,43 @@
           {
             "name": "retention",
             "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Seat",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "kind",
+            "type": {
+              "defined": {
+                "name": "SeatKind"
+              }
+            }
+          },
+          {
+            "name": "player",
+            "docs": [
+              "`Pubkey::default()` when Empty / Bot."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "ready",
+            "docs": [
+              "ReadyCheck only · reset when entering ReadyCheck."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "left",
+            "docs": [
+              "`leave_seat` during Playing (seat stays · claim dies)."
+            ],
+            "type": "bool"
           }
         ]
       }

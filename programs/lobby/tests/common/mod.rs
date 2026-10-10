@@ -192,3 +192,114 @@ pub fn setup_game(svm: &mut LiteSVM, program: Pubkey, params: ConfigParams) -> G
     ok(send(svm, &[ix_init_lobby(&program, &owner.pubkey(), params)], &[&owner]));
     Game { program, owner }
 }
+
+// ─────────────────── P2: rooms ───────────────────
+
+/// The room the player's claim points at (what clients pass as `prev_room`).
+pub fn prev_of(svm: &LiteSVM, player: &Pubkey) -> Option<Pubkey> {
+    let c: PlayerClaim = read(svm, &claim_pda(player));
+    c.current.map(|r| room_pda(&r.game_program, r.room_id))
+}
+
+/// A funded player with a claim (paid by themselves).
+pub fn player(svm: &mut LiteSVM) -> Keypair {
+    let p = funded(svm);
+    ok(send(svm, &[ix_init_claim(&p.pubkey(), &p.pubkey())], &[&p]));
+    p
+}
+
+pub fn next_room_id(svm: &LiteSVM, game: &Pubkey) -> u64 {
+    let m: Matchmaker = read(svm, &matchmaker_pda(game));
+    m.next_room_id
+}
+
+pub fn ix_create_room(svm: &LiteSVM, game: &Pubkey, player: &Pubkey, payer: &Pubkey, room_id: u64) -> Instruction {
+    Instruction {
+        program_id: ::lobby::ID,
+        accounts: ::lobby::accounts::CreateRoom {
+            player: *player,
+            payer: *payer,
+            game_entry: game_entry_pda(game),
+            config: config_pda(game),
+            matchmaker: matchmaker_pda(game),
+            claim: claim_pda(player),
+            prev_room: prev_of(svm, player),
+            new_room: room_pda(game, room_id),
+            system_program: anchor_lang::system_program::ID,
+        }
+        .to_account_metas(None),
+        data: ::lobby::instruction::CreateRoom {}.data(),
+    }
+}
+
+/// Create a private room as `host` (payer = host). Returns room_id.
+pub fn create_room(svm: &mut LiteSVM, game: &Pubkey, host: &Keypair) -> u64 {
+    let id = next_room_id(svm, game);
+    ok({ let ix = ix_create_room(svm, game, &host.pubkey(), &host.pubkey(), id); send(svm, &[ix], &[host]) });
+    id
+}
+
+pub fn ix_join_room(svm: &LiteSVM, game: &Pubkey, room_id: u64, player: &Pubkey) -> Instruction {
+    Instruction {
+        program_id: ::lobby::ID,
+        accounts: ::lobby::accounts::JoinRoom {
+            player: *player,
+            config: config_pda(game),
+            room: room_pda(game, room_id),
+            claim: claim_pda(player),
+            prev_room: prev_of(svm, player),
+        }
+        .to_account_metas(None),
+        data: ::lobby::instruction::JoinRoom {}.data(),
+    }
+}
+
+pub fn ix_leave_room(game: &Pubkey, room_id: u64, player: &Pubkey, public: bool) -> Instruction {
+    Instruction {
+        program_id: ::lobby::ID,
+        accounts: ::lobby::accounts::LeaveRoom {
+            player: *player,
+            room: room_pda(game, room_id),
+            matchmaker: public.then(|| matchmaker_pda(game)),
+        }
+        .to_account_metas(None),
+        data: ::lobby::instruction::LeaveRoom {}.data(),
+    }
+}
+
+pub fn ix_ready(game: &Pubkey, room_id: u64, player: &Pubkey) -> Instruction {
+    Instruction {
+        program_id: ::lobby::ID,
+        accounts: ::lobby::accounts::Ready { player: *player, room: room_pda(game, room_id) }.to_account_metas(None),
+        data: ::lobby::instruction::Ready {}.data(),
+    }
+}
+
+fn host_metas(game: &Pubkey, room_id: u64, host: &Pubkey) -> Vec<anchor_lang::prelude::AccountMeta> {
+    ::lobby::accounts::HostRoom { host: *host, room: room_pda(game, room_id) }.to_account_metas(None)
+}
+pub fn ix_add_bot(game: &Pubkey, room_id: u64, host: &Pubkey, seat: u8) -> Instruction {
+    Instruction { program_id: ::lobby::ID, accounts: host_metas(game, room_id, host), data: ::lobby::instruction::AddBot { seat }.data() }
+}
+pub fn ix_remove_bot(game: &Pubkey, room_id: u64, host: &Pubkey, seat: u8) -> Instruction {
+    Instruction { program_id: ::lobby::ID, accounts: host_metas(game, room_id, host), data: ::lobby::instruction::RemoveBot { seat }.data() }
+}
+pub fn ix_request_start(game: &Pubkey, room_id: u64, host: &Pubkey) -> Instruction {
+    Instruction { program_id: ::lobby::ID, accounts: host_metas(game, room_id, host), data: ::lobby::instruction::RequestStart {}.data() }
+}
+pub fn ix_kick(game: &Pubkey, room_id: u64, host: &Pubkey, seat: u8, victim: &Pubkey) -> Instruction {
+    Instruction {
+        program_id: ::lobby::ID,
+        accounts: ::lobby::accounts::KickPlayer { host: *host, room: room_pda(game, room_id), victim_claim: claim_pda(victim) }
+            .to_account_metas(None),
+        data: ::lobby::instruction::KickPlayer { seat }.data(),
+    }
+}
+
+pub fn room(svm: &LiteSVM, game: &Pubkey, room_id: u64) -> Room {
+    read(svm, &room_pda(game, room_id))
+}
+
+pub fn join(svm: &mut LiteSVM, game: &Pubkey, room_id: u64, p: &Keypair) {
+    ok({ let ix = ix_join_room(svm, game, room_id, &p.pubkey()); send(svm, &[ix], &[p]) });
+}
