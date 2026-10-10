@@ -1,6 +1,8 @@
 [workspace]
 members = [
     "programs/*",
+    # TEST ONLY game program (not an Anchor workspace program → never built/deployed by `anchor`)
+    "tests/mock-game",
 ]
 resolver = "2"
 

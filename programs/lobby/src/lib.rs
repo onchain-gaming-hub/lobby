@@ -67,4 +67,28 @@ pub mod lobby {
     pub fn request_start(ctx: Context<HostRoom>) -> Result<()> {
         instructions::host::handle_request_start(ctx)
     }
+
+    // ── player during the match ──
+    pub fn leave_seat(ctx: Context<LeaveSeat>) -> Result<()> {
+        instructions::game::handle_leave_seat(ctx)
+    }
+
+    // ── anyone (crank) ──
+    pub fn tick(ctx: Context<Tick>) -> Result<()> {
+        instructions::crank::handle_tick(ctx)
+    }
+    pub fn close_room(ctx: Context<CloseRoom>) -> Result<()> {
+        instructions::crank::handle_close_room(ctx)
+    }
+    pub fn close_claim(ctx: Context<CloseClaim>) -> Result<()> {
+        instructions::crank::handle_close_claim(ctx)
+    }
+
+    // ── game (CPI, game_authority PDA signs) ──
+    pub fn begin_match(ctx: Context<GameCpi>) -> Result<()> {
+        instructions::game::handle_begin_match(ctx)
+    }
+    pub fn end_match(ctx: Context<GameCpi>, result: MatchResult) -> Result<()> {
+        instructions::game::handle_end_match(ctx, result)
+    }
 }

@@ -60,6 +60,214 @@
       ]
     },
     {
+      "name": "begin_match",
+      "discriminator": [
+        30,
+        230,
+        183,
+        200,
+        11,
+        146,
+        125,
+        126
+      ],
+      "accounts": [
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.game_program",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "game_entry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.game_program",
+                "account": "Room"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                138,
+                71,
+                96,
+                15,
+                0,
+                196,
+                171,
+                4,
+                206,
+                249,
+                75,
+                87,
+                204,
+                40,
+                40,
+                12,
+                86,
+                124,
+                28,
+                171,
+                34,
+                62,
+                167,
+                237,
+                189,
+                27,
+                220,
+                238,
+                14,
+                10,
+                70,
+                5
+              ]
+            }
+          }
+        },
+        {
+          "name": "game_authority",
+          "docs": [
+            "The game's `[b\"game_authority\"]` PDA, signing via invoke_signed (platform-core 03 §2.2)."
+          ],
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_claim",
+      "discriminator": [
+        42,
+        177,
+        165,
+        35,
+        213,
+        179,
+        211,
+        19
+      ],
+      "accounts": [
+        {
+          "name": "claim",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  97,
+                  105,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "claim.player",
+                "account": "PlayerClaim"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rent_payer",
+          "writable": true,
+          "relations": [
+            "claim"
+          ]
+        },
+        {
+          "name": "prev_room",
+          "optional": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_room",
+      "discriminator": [
+        152,
+        197,
+        88,
+        192,
+        98,
+        197,
+        51,
+        211
+      ],
+      "accounts": [
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.game_program",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rent_payer",
+          "writable": true,
+          "relations": [
+            "room"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "create_room",
       "discriminator": [
         130,
@@ -235,6 +443,123 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "end_match",
+      "discriminator": [
+        34,
+        116,
+        122,
+        191,
+        100,
+        222,
+        20,
+        117
+      ],
+      "accounts": [
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.game_program",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "game_entry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.game_program",
+                "account": "Room"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                138,
+                71,
+                96,
+                15,
+                0,
+                196,
+                171,
+                4,
+                206,
+                249,
+                75,
+                87,
+                204,
+                40,
+                40,
+                12,
+                86,
+                124,
+                28,
+                171,
+                34,
+                62,
+                167,
+                237,
+                189,
+                27,
+                220,
+                238,
+                14,
+                10,
+                70,
+                5
+              ]
+            }
+          }
+        },
+        {
+          "name": "game_authority",
+          "docs": [
+            "The game's `[b\"game_authority\"]` PDA, signing via invoke_signed (platform-core 03 §2.2)."
+          ],
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "result",
+          "type": {
+            "defined": {
+              "name": "MatchResult"
+            }
+          }
+        }
+      ]
     },
     {
       "name": "init_claim",
@@ -703,6 +1028,53 @@
       "args": []
     },
     {
+      "name": "leave_seat",
+      "discriminator": [
+        108,
+        242,
+        177,
+        6,
+        45,
+        227,
+        145,
+        142
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "signer": true
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.game_program",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "ready",
       "discriminator": [
         21,
@@ -840,6 +1212,81 @@
               {
                 "kind": "account",
                 "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "tick",
+      "discriminator": [
+        92,
+        79,
+        44,
+        8,
+        101,
+        80,
+        63,
+        15
+      ],
+      "accounts": [
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.game_program",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "matchmaker",
+          "docs": [
+            "Required when a public room's transition touches the pointer · placeholder otherwise."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  116,
+                  99,
+                  104,
+                  109,
+                  97,
+                  107,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.game_program",
                 "account": "Room"
               }
             ]
@@ -1701,6 +2148,20 @@
           {
             "name": "at",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MatchResult",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Completed"
+          },
+          {
+            "name": "Cancelled"
           }
         ]
       }

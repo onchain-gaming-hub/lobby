@@ -303,3 +303,94 @@ pub fn room(svm: &LiteSVM, game: &Pubkey, room_id: u64) -> Room {
 pub fn join(svm: &mut LiteSVM, game: &Pubkey, room_id: u64, p: &Keypair) {
     ok({ let ix = ix_join_room(svm, game, room_id, &p.pubkey()); send(svm, &[ix], &[p]) });
 }
+
+// ─────────────────── P3: game CPI · crank · close ───────────────────
+
+pub const GAME: Pubkey = mock_game::ID;
+
+/// LiteSVM with lobby + mock-game loaded and mock-game registered (Active) + lobby initialised.
+pub fn game_world() -> (LiteSVM, Game) {
+    let mut svm = new_svm();
+    svm.add_program(GAME, &program_so("mock_game")).unwrap();
+    let g = setup_game(&mut svm, GAME, default_params());
+    (svm, g)
+}
+
+fn play_metas(game: &Pubkey, room_id: u64) -> Vec<anchor_lang::prelude::AccountMeta> {
+    mock_game::accounts::Play {
+        room: room_pda(game, room_id),
+        game_entry: game_entry_pda(game),
+        game_authority: game_authority(&GAME),
+        lobby_program: ::lobby::ID,
+    }
+    .to_account_metas(None)
+}
+pub fn ix_start_game(game: &Pubkey, room_id: u64) -> Instruction {
+    Instruction { program_id: GAME, accounts: play_metas(game, room_id), data: mock_game::instruction::StartGame {}.data() }
+}
+pub fn ix_finish_game(game: &Pubkey, room_id: u64, completed: bool) -> Instruction {
+    Instruction { program_id: GAME, accounts: play_metas(game, room_id), data: mock_game::instruction::FinishGame { completed }.data() }
+}
+/// Call lobby directly with an arbitrary signer as game_authority (attack path).
+pub fn ix_begin_match_direct(game: &Pubkey, room_id: u64, signer: &Pubkey) -> Instruction {
+    Instruction {
+        program_id: ::lobby::ID,
+        accounts: ::lobby::accounts::GameCpi { room: room_pda(game, room_id), game_entry: game_entry_pda(game), game_authority: *signer }
+            .to_account_metas(None),
+        data: ::lobby::instruction::BeginMatch {}.data(),
+    }
+}
+pub fn ix_leave_seat(game: &Pubkey, room_id: u64, player: &Pubkey) -> Instruction {
+    Instruction {
+        program_id: ::lobby::ID,
+        accounts: ::lobby::accounts::LeaveSeat { player: *player, room: room_pda(game, room_id) }.to_account_metas(None),
+        data: ::lobby::instruction::LeaveSeat {}.data(),
+    }
+}
+pub fn ix_tick(game: &Pubkey, room_id: u64, public: bool) -> Instruction {
+    Instruction {
+        program_id: ::lobby::ID,
+        accounts: ::lobby::accounts::Tick { room: room_pda(game, room_id), matchmaker: public.then(|| matchmaker_pda(game)) }
+            .to_account_metas(None),
+        data: ::lobby::instruction::Tick {}.data(),
+    }
+}
+pub fn ix_close_room(game: &Pubkey, room_id: u64, rent_payer: &Pubkey) -> Instruction {
+    Instruction {
+        program_id: ::lobby::ID,
+        accounts: ::lobby::accounts::CloseRoom { room: room_pda(game, room_id), rent_payer: *rent_payer }.to_account_metas(None),
+        data: ::lobby::instruction::CloseRoom {}.data(),
+    }
+}
+pub fn ix_close_claim(svm: &LiteSVM, player: &Pubkey, rent_payer: &Pubkey) -> Instruction {
+    Instruction {
+        program_id: ::lobby::ID,
+        accounts: ::lobby::accounts::CloseClaim { claim: claim_pda(player), rent_payer: *rent_payer, prev_room: prev_of(svm, player) }
+            .to_account_metas(None),
+        data: ::lobby::instruction::CloseClaim {}.data(),
+    }
+}
+
+/// host + one more human + 2 bots → request_start → other ready → Starting. Returns (room_id, host, other).
+pub fn starting_room(svm: &mut LiteSVM, game: &Pubkey) -> (u64, Keypair, Keypair) {
+    let host = player(svm);
+    let other = player(svm);
+    let id = create_room(svm, game, &host);
+    join(svm, game, id, &other);
+    ok(send(svm, &[ix_add_bot(game, id, &host.pubkey(), 2)], &[&host]));
+    ok(send(svm, &[ix_add_bot(game, id, &host.pubkey(), 3)], &[&host]));
+    ok(send(svm, &[ix_request_start(game, id, &host.pubkey())], &[&host]));
+    ok(send(svm, &[ix_ready(game, id, &other.pubkey())], &[&other]));
+    assert_eq!(room(svm, game, id).phase, Phase::Starting);
+    (id, host, other)
+}
+
+pub fn advance(svm: &mut LiteSVM, secs: i64) {
+    let t = now(svm);
+    set_time(svm, t + secs);
+}
+
+pub fn crank(svm: &mut LiteSVM, ix: Instruction) -> TransactionResult {
+    let k = funded(svm);
+    send(svm, &[ix], &[&k])
+}

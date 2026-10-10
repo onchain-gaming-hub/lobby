@@ -1721,6 +1721,7 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "litesvm",
+ "mock_game",
  "solana-account",
  "solana-keypair",
  "solana-message",
@@ -1759,6 +1760,13 @@ dependencies = [
  "keccak",
  "rand_core 0.6.4",
  "zeroize",
+]
+
+[[package]]
+name = "mock_game"
+version = "0.0.0"
+dependencies = [
+ "anchor-lang",
 ]
 
 [[package]]
