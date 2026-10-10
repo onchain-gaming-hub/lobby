@@ -100,6 +100,6 @@ fn enums_are_append_only() {
 
 #[test]
 fn caps_respect_contracts() {
-    assert!(MAX_SEATS <= 32, "rewards-pool MAX_WINNERS contract");
+    // MAX_SEATS <= 32 is a compile-time assert in constants.rs
     assert_eq!((MAX_READY_TTL, MAX_START_TTL, MAX_LOBBY_TTL, CAP_MAX_GAME_TTL, MAX_RETENTION), (120, 300, 21_600, 86_400, 86_400));
 }

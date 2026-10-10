@@ -13,6 +13,7 @@ pub const ACCOUNT_VERSION: u8 = 1;
 
 /// Program ceiling on seats per room. 🔒 Contract with rewards-pool: must stay ≤ 32 (MAX_WINNERS).
 pub const MAX_SEATS: u8 = 8;
+const _: () = assert!(MAX_SEATS <= 32, "rewards-pool MAX_WINNERS contract");
 /// L1 — a kicked player cannot rejoin the same room for this long.
 pub const KICK_COOLDOWN_SECS: i64 = 10;
 
