@@ -84,7 +84,7 @@ fn start_ttl_and_game_ttl_cancel() {
     ok(crank(&mut svm, ix_tick(&game, id, false)));
     let r = room(&svm, &game, id);
     assert_eq!((r.phase, r.end_reason), (Phase::Cancelled, EndReason::StartExpired));
-    assert!(crank(&mut svm, ix_start_game(&game, id)).is_err()); // too late now
+    assert_err(&crank(&mut svm, ix_start_game(&game, id)), code(::lobby::errors::LobbyError::WrongPhase)); // too late now
 
     let (id2, _, _) = starting_room(&mut svm, &game);
     advance(&mut svm, 120);

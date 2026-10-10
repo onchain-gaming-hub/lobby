@@ -63,7 +63,7 @@ fn init_twice_fails() {
 fn invalid_configs_are_rejected() {
     let base = default_params();
     let mut bad: Vec<(&str, ConfigParams)> = Vec::new();
-    let mut p = base; p.max_seats = 1; bad.push(("max_seats 1", p));
+    let mut p = base; p.max_seats = 1; p.min_seats = 1; p.min_humans = 1; bad.push(("max_seats 1 (lower bound only)", p));
     let mut p = base; p.max_seats = MAX_SEATS + 1; bad.push(("max_seats > MAX_SEATS", p));
     let mut p = base; p.min_humans = 0; bad.push(("min_humans 0", p));
     let mut p = base; p.min_seats = 2; p.min_humans = 3; bad.push(("min_humans > min_seats", p));

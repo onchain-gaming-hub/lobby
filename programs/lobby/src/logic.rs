@@ -93,14 +93,15 @@ pub fn set_phase(room: &mut Room, to: Phase, reason: EndReason, now: i64) {
     emit!(PhaseChanged { game_program: room.game_program, room_id: room.room_id, from, to, end_reason: reason, at: now });
 }
 
-pub fn emit_seat(room: &Room, seat: usize, cause: SeatCause, now: i64) {
-    let s = room.seats[seat];
+/// Emit AFTER mutating the seat: `kind` = the seat's new state · `player` = the player affected
+/// (joined / left / kicked / timed out) or default for bot changes — an indexer can apply it directly.
+pub fn emit_seat(room: &Room, seat: usize, player: Pubkey, cause: SeatCause, now: i64) {
     emit!(SeatChanged {
         game_program: room.game_program,
         room_id: room.room_id,
         seat: seat as u8,
-        kind: s.kind,
-        player: s.player,
+        kind: room.seats[seat].kind,
+        player,
         cause,
         at: now,
     });
@@ -137,7 +138,7 @@ pub fn enter_ready_check(room: &mut Room, pre_ready: Option<usize>, now: i64) {
 
 /// ReadyCheck → Starting when every active human is ready (lobby-state §8B ⭐ — evaluated in the same ix).
 pub fn start_if_all_ready(room: &mut Room, now: i64) -> bool {
-    if room.phase == Phase::ReadyCheck && room.seats.iter().filter(|s| s.is_active_human()).all(|s| s.ready) {
+    if room.phase == Phase::ReadyCheck && room.humans() > 0 && room.seats.iter().filter(|s| s.is_active_human()).all(|s| s.ready) {
         set_phase(room, Phase::Starting, EndReason::None, now);
         return true;
     }
@@ -262,6 +263,6 @@ pub fn seat_player(room: &mut Room, claim: &mut PlayerClaim, now: i64) -> Result
     room.last_human_activity_at = now;
     claim.current = Some(room.room_ref());
     claim.last_joined_at = now;
-    emit_seat(room, i, SeatCause::Join, now);
+    emit_seat(room, i, claim.player, SeatCause::Join, now);
     Ok(i)
 }

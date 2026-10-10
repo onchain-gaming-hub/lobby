@@ -31,7 +31,7 @@ pub fn handle_tick(ctx: Context<Tick>) -> Result<()> {
                 for i in 0..room.seats.len() {
                     if room.seats[i].kind == SeatKind::Empty {
                         room.seats[i] = Seat { kind: SeatKind::Bot, ..Seat::EMPTY };
-                        emit_seat(room, i, SeatCause::Backfill, now);
+                        emit_seat(room, i, Pubkey::default(), SeatCause::Backfill, now);
                     }
                 }
                 clear_pointer_if(mm, room.game_program, room.room_id, now);
@@ -43,16 +43,19 @@ pub fn handle_tick(ctx: Context<Tick>) -> Result<()> {
                 for i in 0..room.seats.len() {
                     let s = room.seats[i];
                     if s.is_active_human() && !s.ready {
-                        emit_seat(room, i, SeatCause::ReadyTimeout, now);
                         room.seats[i] = Seat::EMPTY; // claim dies with the seat
+                        emit_seat(room, i, s.player, SeatCause::ReadyTimeout, now);
                     } else if room.is_public && s.kind == SeatKind::Bot {
                         room.seats[i] = Seat::EMPTY; // public Waiting is human-only (invariant 5)
-                        emit_seat(room, i, SeatCause::Purge, now);
+                        emit_seat(room, i, Pubkey::default(), SeatCause::Purge, now);
                     }
                 }
                 if room.humans() == 0 {
                     cancel_room(room, mm, EndReason::NoHumans, now)?;
                 } else {
+                    for s in room.seats.iter_mut() {
+                        s.ready = false; // no stale ready flags back in Waiting
+                    }
                     set_phase(room, Phase::Waiting, EndReason::None, now);
                     room.last_human_activity_at = now;
                     if room.is_public {

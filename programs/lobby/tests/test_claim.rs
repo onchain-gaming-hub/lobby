@@ -29,7 +29,7 @@ fn r1_init_claim_twice_fails_and_rent_payer_never_changes() {
     let other = funded(&mut svm);
     ok(send(&mut svm, &[ix_init_claim(&player.pubkey(), &relayer.pubkey())], &[&player, &relayer]));
     let r = send(&mut svm, &[ix_init_claim(&player.pubkey(), &other.pubkey())], &[&player, &other]);
-    assert!(r.is_err(), "second init must fail (plain init)");
+    assert_err(&r, 0); // System AccountAlreadyInUse — plain init cannot re-init
     let c: PlayerClaim = read(&svm, &claim_pda(&player.pubkey()));
     assert_eq!(c.rent_payer, relayer.pubkey());
 }
@@ -45,4 +45,17 @@ fn claim_is_bound_to_the_signing_player() {
     ix.accounts[2].pubkey = claim_pda(&victim.pubkey());
     let r = send(&mut svm, &[ix], &[&player, &payer]);
     assert!(format!("{:?}", r.unwrap_err().err).contains("Custom(2006)"), "ConstraintSeeds");
+}
+
+#[test]
+fn r4_prefunded_claim_pda_payer_covers_only_the_shortfall() {
+    let mut svm = new_svm();
+    let player = funded(&mut svm);
+    let relayer = funded(&mut svm);
+    svm.airdrop(&claim_pda(&player.pubkey()), 1_000_000).unwrap(); // griefer pre-funds (≥ rent of 0 B)
+    let before = lamports(&svm, &relayer.pubkey());
+    ok(send(&mut svm, &[ix_init_claim(&player.pubkey(), &relayer.pubkey())], &[&player, &relayer]));
+    assert_eq!(before - lamports(&svm, &relayer.pubkey()), svm.minimum_balance_for_rent_exemption(188) - 1_000_000);
+    let c: PlayerClaim = read(&svm, &claim_pda(&player.pubkey()));
+    assert_eq!(c.rent_payer, relayer.pubkey());
 }

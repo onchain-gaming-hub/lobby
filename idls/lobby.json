@@ -786,35 +786,6 @@
           "signer": true
         },
         {
-          "name": "config",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  111,
-                  98,
-                  98,
-                  121,
-                  95,
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "room.game_program",
-                "account": "Room"
-              }
-            ]
-          }
-        },
-        {
           "name": "room",
           "writable": true,
           "pda": {

@@ -244,7 +244,6 @@ pub fn ix_join_room(svm: &LiteSVM, game: &Pubkey, room_id: u64, player: &Pubkey)
         program_id: ::lobby::ID,
         accounts: ::lobby::accounts::JoinRoom {
             player: *player,
-            config: config_pda(game),
             room: room_pda(game, room_id),
             claim: claim_pda(player),
             prev_room: prev_of(svm, player),
@@ -393,4 +392,18 @@ pub fn advance(svm: &mut LiteSVM, secs: i64) {
 pub fn crank(svm: &mut LiteSVM, ix: Instruction) -> TransactionResult {
     let k = funded(svm);
     send(svm, &[ix], &[&k])
+}
+
+// ─────────────────── events ───────────────────
+
+/// Decode `emit!` events of type T from a tx's logs ("Program data: <base64>").
+pub fn events<T: anchor_lang::AnchorDeserialize + anchor_lang::Discriminator>(meta: &litesvm::types::TransactionMetadata) -> Vec<T> {
+    use base64::Engine;
+    meta.logs
+        .iter()
+        .filter_map(|l| l.strip_prefix("Program data: "))
+        .filter_map(|b| base64::engine::general_purpose::STANDARD.decode(b).ok())
+        .filter(|d| d.starts_with(T::DISCRIMINATOR))
+        .map(|d| T::deserialize(&mut &d[T::DISCRIMINATOR.len()..]).unwrap())
+        .collect()
 }

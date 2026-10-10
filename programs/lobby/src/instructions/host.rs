@@ -33,7 +33,7 @@ pub fn handle_add_bot(ctx: Context<HostRoom>, seat: u8) -> Result<()> {
     require!(room.seats[i].kind == SeatKind::Empty, LobbyError::SeatNotEmpty);
     room.seats[i] = Seat { kind: SeatKind::Bot, ..Seat::EMPTY };
     room.last_human_activity_at = now;
-    emit_seat(room, i, SeatCause::AddBot, now);
+    emit_seat(room, i, Pubkey::default(), SeatCause::AddBot, now);
     Ok(())
 }
 
@@ -45,7 +45,7 @@ pub fn handle_remove_bot(ctx: Context<HostRoom>, seat: u8) -> Result<()> {
     require!(room.seats[i].kind == SeatKind::Bot, LobbyError::SeatNotBot);
     room.seats[i] = Seat::EMPTY;
     room.last_human_activity_at = now;
-    emit_seat(room, i, SeatCause::RemoveBot, now);
+    emit_seat(room, i, Pubkey::default(), SeatCause::RemoveBot, now);
     Ok(())
 }
 
@@ -59,6 +59,7 @@ pub fn handle_request_start(ctx: Context<HostRoom>) -> Result<()> {
     let hi = room.seat_of(&host).ok_or(LobbyError::NotInRoom)?;
     room.last_human_activity_at = now;
     enter_ready_check(room, Some(hi), now);
+    emit!(PlayerReady { game_program: room.game_program, room_id: room.room_id, player: host, at: now }); // host auto-ready
     start_if_all_ready(room, now); // solo host + bots → Starting right away (no ReadyCheck loop)
     Ok(())
 }
@@ -84,9 +85,10 @@ pub fn handle_kick_player(ctx: Context<KickPlayer>, seat: u8) -> Result<()> {
     require!(s.player != host, LobbyError::CannotKickSelf);
     let victim = &mut ctx.accounts.victim_claim;
     require_keys_eq!(victim.player, s.player, LobbyError::InvalidSeat);
-    emit_seat(room, i, SeatCause::Kick, now); // emit with the kicked player before clearing
     room.seats[i] = Seat::EMPTY;
+    emit_seat(room, i, s.player, SeatCause::Kick, now);
     room.last_human_activity_at = now;
+    // Single slot: a later kick elsewhere overwrites it (accepted — L1 is QoL, 01 §4).
     victim.kick = Some(KickMark { room: room.room_ref(), until: now + KICK_COOLDOWN_SECS });
     Ok(())
 }

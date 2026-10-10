@@ -108,10 +108,10 @@ fn prev_room_must_match_the_claim() {
     let r1 = create_room(&mut svm, &game, &a);
     let r2 = create_room(&mut svm, &game, &b);
     let mut ix = ix_join_room(&svm, &game, r2, &a.pubkey());
-    ix.accounts[4].pubkey = room_pda(&game, r2); // lie about prev_room
+    ix.accounts[3].pubkey = room_pda(&game, r2); // lie about prev_room
     assert_err(&send(&mut svm, &[ix], &[&a]), code(E::PrevRoomMismatch));
     let mut ix = ix_join_room(&svm, &game, r2, &a.pubkey());
-    ix.accounts[4].pubkey = ::lobby::ID; // placeholder = None while claim points at r1
+    ix.accounts[3].pubkey = ::lobby::ID; // placeholder = None while claim points at r1
     assert_err(&send(&mut svm, &[ix], &[&a]), code(E::PrevRoomRequired));
     let _ = r1;
 }
@@ -265,4 +265,18 @@ fn join_room_rejects_full_rooms() {
     }
     let late = player(&mut svm);
     assert_err(&{ let ix = ix_join_room(&svm, &game, id, &late.pubkey()); send(&mut svm, &[ix], &[&late]) }, code(E::RoomFull));
+}
+
+#[test]
+fn room_pda_already_holding_full_rent_costs_payer_nothing() {
+    let (mut svm, game) = world();
+    let host = player(&mut svm);
+    let relayer = funded(&mut svm);
+    let rent = svm.minimum_balance_for_rent_exemption(351);
+    svm.airdrop(&room_pda(&game, 1), rent + 7).unwrap();
+    let before = lamports(&svm, &relayer.pubkey());
+    { let ix = ix_create_room(&svm, &game, &host.pubkey(), &relayer.pubkey(), 1); ok(send(&mut svm, &[ix], &[&host, &relayer])); }
+    assert_eq!(lamports(&svm, &relayer.pubkey()), before); // no transfer
+    let r = room(&svm, &game, 1);
+    assert_eq!((r.rent_payer, r.phase), (relayer.pubkey(), Phase::Waiting)); // donation goes to rent_payer on close
 }

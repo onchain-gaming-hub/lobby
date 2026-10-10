@@ -60,17 +60,17 @@ pub fn handle_create_room(ctx: Context<CreateRoom>) -> Result<()> {
     a.claim.last_joined_at = now;
     write_room(&new_room, &room)?;
     emit_room_created(&room, None, now);
-    emit_seat(&room, 0, SeatCause::Join, now);
+    emit_seat(&room, 0, player, SeatCause::Join, now);
     Ok(())
 }
 
 // ─────────────── join_room (no payer) ───────────────
 
+/// No `config`: `private_enabled` gates *creating* rooms only — a room that exists stays joinable
+/// even if the owner later disables the mode (config changes affect new rooms only · 02 §6 ix 2).
 #[derive(Accounts)]
 pub struct JoinRoom<'info> {
     pub player: Signer<'info>,
-    #[account(seeds = [LOBBY_CONFIG_SEED, room.game_program.as_ref()], bump = config.bump)]
-    pub config: Box<Account<'info, LobbyConfig>>,
     #[account(mut, seeds = [ROOM_SEED, room.game_program.as_ref(), &room.room_id.to_le_bytes()], bump = room.bump)]
     pub room: Box<Account<'info, Room>>,
     #[account(mut, seeds = [CLAIM_SEED, player.key().as_ref()], bump = claim.bump)]
@@ -82,7 +82,7 @@ pub struct JoinRoom<'info> {
 pub fn handle_join_room(ctx: Context<JoinRoom>) -> Result<()> {
     let now = now()?;
     let a = ctx.accounts;
-    require!(a.config.private_enabled && !a.room.is_public, LobbyError::ModeDisabled);
+    require!(!a.room.is_public, LobbyError::ModeDisabled); // public rooms are entered via quick_match
     require!(a.room.phase == Phase::Waiting, LobbyError::NotWaiting);
     let prev = a.prev_room.as_ref().map(|p| p.to_account_info());
     require_claim_free(&a.claim, prev.as_ref())?; // reads prev data before we touch seats
@@ -112,7 +112,7 @@ pub fn handle_leave_room(ctx: Context<LeaveRoom>) -> Result<()> {
     let i = room.seat_of(&player).ok_or(LobbyError::NotInRoom)?;
     room.seats[i] = Seat::EMPTY;
     room.last_human_activity_at = now;
-    emit_seat(room, i, SeatCause::Leave, now);
+    emit_seat(room, i, player, SeatCause::Leave, now);
     if room.host == Some(player) {
         reassign_host(room, now);
     }
