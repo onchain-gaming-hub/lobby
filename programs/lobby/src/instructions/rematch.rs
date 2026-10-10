@@ -118,7 +118,9 @@ pub fn handle_rematch_create(ctx: Context<RematchCreate>) -> Result<()> {
         player,
         now,
     )?;
-    mark_rematch_created(&mut a.claim, a.old_room.phase_since, now)?; // first rematch after the game: no cooldown
+    // rematch is cooled down like every create: any exemption let one player chain
+    // rematch → (bots) → end → rematch and burn the relayer's rent budget (review P4 rounds 1–2)
+    mark_room_created(&mut a.claim, now)?;
     enter_room(&mut a.claim, &room.room_ref(), now);
     a.old_room.rematch_room_id = Some(room.room_id);
     write_room(&new_room, &room)?;

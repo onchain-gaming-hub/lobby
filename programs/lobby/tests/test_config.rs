@@ -87,6 +87,7 @@ fn invalid_configs_are_rejected() {
         bad.push(("ttl zero", p));
     }
     let mut p = base; p.ttl.retention = 59; bad.push(("retention < rematch_window", p));
+    let mut p = base; p.ttl.rematch_window = (CREATE_COOLDOWN_SECS - 1) as u32; bad.push(("rematch_window < create cooldown", p));
     let mut p = base; p.ttl.ready = MAX_READY_TTL + 1; bad.push(("ready cap", p));
     let mut p = base; p.ttl.start = MAX_START_TTL + 1; bad.push(("start cap", p));
     let mut p = base; p.ttl.lobby = MAX_LOBBY_TTL + 1; bad.push(("lobby cap", p));
@@ -109,7 +110,7 @@ fn caps_themselves_are_allowed() {
     let mut p = default_params();
     p.max_seats = MAX_SEATS;
     p.min_seats = MAX_SEATS;
-    p.ttl = RoomTtl { wait: 1, ready: MAX_READY_TTL, lobby: MAX_LOBBY_TTL, start: MAX_START_TTL, max_game: CAP_MAX_GAME_TTL, rematch_window: 1, retention: MAX_RETENTION };
+    p.ttl = RoomTtl { wait: 1, ready: MAX_READY_TTL, lobby: MAX_LOBBY_TTL, start: MAX_START_TTL, max_game: CAP_MAX_GAME_TTL, rematch_window: CREATE_COOLDOWN_SECS as u32, retention: MAX_RETENTION };
     let mut svm = new_svm();
     setup_game(&mut svm, Pubkey::new_unique(), p);
 }

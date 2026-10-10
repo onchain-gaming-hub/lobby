@@ -27,6 +27,8 @@ pub fn validate_config(p: &ConfigParams) -> Result<()> {
         && [t.wait, t.ready, t.lobby, t.start, t.max_game, t.rematch_window, t.retention].iter().all(|x| *x > 0)
         && t.retention >= t.rematch_window
         && t.wait < t.lobby // else a public room is cancelled before bots can ever fill it (Opus n8)
+        // a creator still on the create cooldown when the game ends must keep some window to rematch
+        && t.rematch_window as i64 >= CREATE_COOLDOWN_SECS
         && t.ready <= MAX_READY_TTL
         && t.start <= MAX_START_TTL
         && t.lobby <= MAX_LOBBY_TTL
@@ -266,19 +268,6 @@ pub fn mark_room_created(claim: &mut PlayerClaim, now: i64) -> Result<()> {
     );
     claim.last_created_at = now;
     Ok(())
-}
-
-/// rematch_create: the FIRST create after the old game ended is exempt from the cooldown (a creator
-/// whose game ended within 60s would otherwise lose the whole REMATCH_WINDOW — review P4 m1); every
-/// later one is cooled down, or one Ended room would allow create → leave → create loops that burn
-/// the relayer's rent budget (Opus gate P4 M1).
-pub fn mark_rematch_created(claim: &mut PlayerClaim, game_ended_at: i64, now: i64) -> Result<()> {
-    if claim.last_created_at < game_ended_at {
-        claim.last_created_at = now;
-        Ok(())
-    } else {
-        mark_room_created(claim, now)
-    }
 }
 
 /// After `init_claim`, the ONLY place that points a claim at a room. Every entry ix must go through here so

@@ -112,21 +112,31 @@ fn player_who_left_mid_game_can_still_rematch() {
 }
 
 #[test]
-fn first_rematch_create_after_the_game_is_exempt_but_records_the_create() {
-    // solo-ish creator whose game ended within the cooldown can still rematch (review P4 m1)
+fn rematch_create_is_cooled_down_but_the_creator_still_gets_a_window() {
     let (mut svm, g) = game_world();
     let game = g.program;
-    let (id, host, _) = starting_room(&mut svm, &game); // host created < 60s ago
+    let (id, host, other) = starting_room(&mut svm, &game); // host created at T0
     ok(crank(&mut svm, ix_start_game(&game, id)));
-    advance(&mut svm, 5); // a real match takes time; created strictly before the game ended
+    advance(&mut svm, 5);
+    ok(crank(&mut svm, ix_finish_game(&game, id, true))); // ended at T0+5
+    let nid = next_room_id(&svm, &game);
+    // the creator is still cooling down …
+    { let ix = ix_rematch_create(&svm, &game, id, &host.pubkey(), &host.pubkey(), None, nid); assert_err(&send(&mut svm, &[ix], &[&host]), code(E::CreateCooldown)); }
+    // … but can create at T0+60 < ended + window (validate_config: window ≥ cooldown)
+    advance(&mut svm, CREATE_COOLDOWN_SECS - 5);
+    { let ix = ix_rematch_create(&svm, &game, id, &host.pubkey(), &host.pubkey(), None, nid); ok(send(&mut svm, &[ix], &[&host])); }
+    { let ix = ix_rematch_join(&svm, &game, id, &other.pubkey(), nid); ok(send(&mut svm, &[ix], &[&other])); }
+}
+
+#[test]
+fn another_roster_member_can_create_immediately() {
+    let (mut svm, g) = game_world();
+    let game = g.program;
+    let (id, _host, other) = starting_room(&mut svm, &game);
+    ok(crank(&mut svm, ix_start_game(&game, id)));
     ok(crank(&mut svm, ix_finish_game(&game, id, true)));
     let nid = next_room_id(&svm, &game);
-    { let ix = ix_rematch_create(&svm, &game, id, &host.pubkey(), &host.pubkey(), None, nid); ok(send(&mut svm, &[ix], &[&host])); } // first rematch: exempt
-    assert_eq!(read::<PlayerClaim>(&svm, &claim_pda(&host.pubkey())).last_created_at, now(&svm));
-    // …so a quick create right after is cooled down
-    ok(send(&mut svm, &[ix_leave_room(&game, nid, &host.pubkey(), false)], &[&host]));
-    let r = { let ix = ix_qm_create(&svm, &game, &host.pubkey(), &host.pubkey(), next_room_id(&svm, &game)); send(&mut svm, &[ix], &[&host]) };
-    assert_err(&r, code(E::CreateCooldown));
+    { let ix = ix_rematch_create(&svm, &game, id, &other.pubkey(), &other.pubkey(), None, nid); ok(send(&mut svm, &[ix], &[&other])); }
 }
 
 #[test]
@@ -168,21 +178,48 @@ fn rematch_room_of_another_game_with_the_same_id_is_stale() {
     assert_err(&send(&mut svm, &[ix], &[&other]), code(E::StaleRematch));
 }
 
+fn long_rematch_window(svm: &mut litesvm::LiteSVM, g: &Game) {
+    let mut p = default_params();
+    p.ttl.rematch_window = 300;
+    ok(send(svm, &[ix_update_config(&g.program, &g.owner.pubkey(), p)], &[&g.owner]));
+}
+
 #[test]
 fn one_ended_room_cannot_be_looped_to_burn_rent_budget() {
-    // Opus gate P4 M1 regression: rematch_create → leave → rematch_create (dead proof) …
+    // regression (Opus gate P4 M1): rematch_create → leave → rematch_create (dead proof) …
     let (mut svm, g) = game_world();
+    long_rematch_window(&mut svm, &g); // so the window is not what stops the loop
     let game = g.program;
     let (old, host, _other) = ended_room(&mut svm, &game);
     let relayer = funded(&mut svm);
     let r1 = next_room_id(&svm, &game);
-    { let ix = ix_rematch_create(&svm, &game, old, &host.pubkey(), &relayer.pubkey(), None, r1); ok(send(&mut svm, &[ix], &[&host, &relayer])); } // first: exempt
+    { let ix = ix_rematch_create(&svm, &game, old, &host.pubkey(), &relayer.pubkey(), None, r1); ok(send(&mut svm, &[ix], &[&host, &relayer])); }
     ok(send(&mut svm, &[ix_leave_room(&game, r1, &host.pubkey(), false)], &[&host]));
     advance(&mut svm, 1);
     let r2 = next_room_id(&svm, &game);
     { let ix = ix_rematch_create(&svm, &game, old, &host.pubkey(), &relayer.pubkey(), Some(r1), r2); assert_err(&send(&mut svm, &[ix], &[&host, &relayer]), code(E::CreateCooldown)); }
-    advance(&mut svm, CREATE_COOLDOWN_SECS);
-    { let ix = ix_rematch_create(&svm, &game, old, &host.pubkey(), &relayer.pubkey(), Some(r1), r2); assert!(send(&mut svm, &[ix], &[&host, &relayer]).is_err(), "window (60s) is over by now"); }
+    advance(&mut svm, CREATE_COOLDOWN_SECS - 1);
+    { let ix = ix_rematch_create(&svm, &game, old, &host.pubkey(), &relayer.pubkey(), Some(r1), r2); ok(send(&mut svm, &[ix], &[&host, &relayer])); } // allowed again after the cooldown
+}
+
+#[test]
+fn chained_solo_rematches_are_cooled_down() {
+    // regression (review P4 round 2): rematch → bots → begin/end → rematch from the new Ended room
+    let (mut svm, g) = game_world();
+    long_rematch_window(&mut svm, &g);
+    let game = g.program;
+    let (old, host, _other) = ended_room(&mut svm, &game);
+    let r1 = next_room_id(&svm, &game);
+    { let ix = ix_rematch_create(&svm, &game, old, &host.pubkey(), &host.pubkey(), None, r1); ok(send(&mut svm, &[ix], &[&host])); }
+    for s in 1..4 {
+        ok(send(&mut svm, &[ix_add_bot(&game, r1, &host.pubkey(), s)], &[&host]));
+    }
+    ok(send(&mut svm, &[ix_request_start(&game, r1, &host.pubkey())], &[&host])); // solo → Starting
+    ok(crank(&mut svm, ix_start_game(&game, r1)));
+    advance(&mut svm, 1);
+    ok(crank(&mut svm, ix_finish_game(&game, r1, true)));
+    let r2 = next_room_id(&svm, &game);
+    { let ix = ix_rematch_create(&svm, &game, r1, &host.pubkey(), &host.pubkey(), None, r2); assert_err(&send(&mut svm, &[ix], &[&host]), code(E::CreateCooldown)); }
 }
 
 #[test]
