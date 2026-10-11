@@ -63,12 +63,12 @@ pub enum LobbyError {
     InvalidConfig,
     #[msg("Signer is not GameEntry.owner")]
     NotGameOwner,
-    #[msg("Seat index out of range")]
+    #[msg("Seat index out of range, or the victim claim does not belong to that seat")]
     InvalidSeat,
     #[msg("Arithmetic overflow")]
     MathOverflow,
     /// Defensive: quick_match_join on a room that is not public (unreachable while invariant 7 holds).
-    #[msg("Room account is not the expected PDA")]
+    #[msg("Room is not a public room")]
     WrongRoom,
     #[msg("Claim has not been idle for CLAIM_IDLE_SECS yet")]
     ClaimNotIdle,

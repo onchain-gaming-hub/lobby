@@ -7,4 +7,4 @@ Anchor program กลางของ **blockchain-games-hub** สำหรับ
 - Design source (read-only, อยู่นอก repo): `<local-path>`
 - Owner: **`maintainer`** (`<internal>`)
 
-สถานะ: spec draft — ยังไม่ scaffold code · devnet only
+สถานะ: **program v1 มี code ครบ 21 ix** (IDL 0.1.0 · test 98 · ผ่าน review gate ทุก phase) · **ยังไม่ deploy** (P6 รอ maintainer) · devnet only · แผนและ log: [`specs/designs/05-implementation-plan.md`](specs/designs/05-implementation-plan.md)

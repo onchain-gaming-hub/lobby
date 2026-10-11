@@ -2330,7 +2330,7 @@
     {
       "code": 6029,
       "name": "InvalidSeat",
-      "msg": "Seat index out of range"
+      "msg": "Seat index out of range, or the victim claim does not belong to that seat"
     },
     {
       "code": 6030,
@@ -2340,7 +2340,7 @@
     {
       "code": 6031,
       "name": "WrongRoom",
-      "msg": "Room account is not the expected PDA"
+      "msg": "Room is not a public room"
     },
     {
       "code": 6032,
