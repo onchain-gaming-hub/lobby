@@ -21,7 +21,7 @@ A shared Solana program for **rooms, matchmaking, ready checks and rematch**, us
 - **Rematch**: after a match ends, players move as a group into a new private room within a time window.
 - **One player is in at most one room, hub-wide.** The program enforces this, not the client.
 - **No on-chain timers.** Every waiting phase has a deadline, and anyone can call the permissionless `tick` to apply it. A Cloudflare cron Worker ([`worker/`](worker/)) does this as a backstop.
-- **Rent**: rooms and player claims are funded by a `payer` signer (the player, or a gasless relayer on their behalf), and `close_room` / `close_claim` refund only that payer. The game owner funds the per-game config, which is never closed.
+- **Rent**: rooms and player claims are funded by a `payer` signer (the player, or a gasless relayer on their behalf), and `close_room` / `close_claim` refund only that payer. The game owner funds the per-game config and matchmaker, which are never closed.
 
 ```
 Waiting ──► ReadyCheck ──► Starting ──► Playing ──► Ended

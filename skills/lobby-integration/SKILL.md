@@ -7,7 +7,7 @@ description: How to integrate a game program or a frontend with the blockchain-g
 
 > Program `lobby` · IDL **0.1.0** (frozen) · Anchor 1.2.1 · **devnet** `5zdBSvep3yV6v1SVD67uw9N5Wb3eT9Hp9D3eg4YSRqRu`
 > Source of truth: `idls/lobby.json` and `programs/lobby/src/`. If this guide and the IDL disagree, the IDL wins. Please report the mismatch.
-> Paths in this guide are relative to the root of the `lobby` repository that ships this file.
+> Repository: https://github.com/solana-games-hub/lobby · paths in this guide are relative to its root.
 
 ## 0. Mental model
 
@@ -132,7 +132,7 @@ Caller types:
 | `begin_match()` | G | Starting | → Playing |
 | `end_match(result)` | G | Playing (Completed or Cancelled) · Starting (Cancelled only) | → Ended or Cancelled(GameCancelled) |
 
-**Rematch conditions** (both rematch instructions): the old room is `Ended` (not Cancelled) · `rematch_enabled` was on when it was created (else `ModeDisabled`) · `now < phase_since + ttl.rematch_window` (else `RematchClosed`) · the caller sat in it as a human, even if they later left (else `NotInRoster`). Accepted limitations: an idle rematch host can hold the group in Waiting until `ttl.lobby` (others may leave and create their own room), and a group can split into two rooms if the first rematch room becomes unjoinable.
+**Rematch conditions** (both rematch instructions): the old room is `Ended` (not Cancelled) · `rematch_enabled` was on when it was created (else `ModeDisabled`) · `now < phase_since + ttl.rematch_window` (else `RematchClosed`) · the caller sat in it as a human, even if they later left (else `NotInRoster`). Accepted limitations: while the rematch room stays joinable, nobody can create a replacement (`rematch_create` → `StaleRematch`) until `ttl.rematch_window` closes, so an idle rematch host can hold the group; players can always leave and quick-match or create their own room. A group can also split into two rooms if the first rematch room becomes unjoinable.
 
 **Limits:**
 
@@ -202,7 +202,7 @@ on 6001 StaleRematch → re-read old_room: join the new pointer, or create if th
 ## 5. Game integration (CPI)
 
 ### 5.1 Prerequisites
-1. **Register the game in platform-core.** Platform-core's `register_game` instruction is signed by a hub account holding the GameRegistrar or Admin role, co-signed by the future game owner. The game program must already be deployed (upgradeable loader). Registration records `GameEntry.owner` and `game_authority`, the game's PDA from seed `[b"game_authority"]`. Ask the hub admins to register your game; lobby rejects room creation until the entry is `Active`.
+1. **Register the game in platform-core.** Platform-core's `register_game` instruction is signed by a hub account holding the GameRegistrar or Admin role, co-signed by the future game owner. The game program must already be deployed (upgradeable loader). Registration records `GameEntry.owner` and `game_authority`, the game's PDA from seed `[b"game_authority"]`. Ask the hub admins to register your game. Registration sets the entry `Active`; lobby rejects `init_lobby` and room creation while it is not (e.g. Suspended).
 2. **The owner calls `init_lobby(params)` once**, from their own wallet (not relayed). `ConfigParams`:
 
    | Field | Meaning |
@@ -215,10 +215,10 @@ on 6001 StaleRematch → re-read old_room: join the new pointer, or create if th
    | `rematch_enabled` | Rooms created from now on allow rematch |
    | `ttl` | `wait`, `ready`, `lobby`, `start`, `max_game`, `rematch_window`, `retention` in seconds (limits in §2) |
 
-3. Copy `idls/lobby.json` into your program and use `declare_program!(lobby)` (Anchor 1.2.1).
+3. Copy [`idls/lobby.json`](../../idls/lobby.json) into your program and use `declare_program!(lobby)` (Anchor 1.2.1).
 
 ### Lifecycle of one match
-1. Players gather in a room. The last `ready()` (or a solo host's `request_start`) moves it to **Starting**.
+1. Players gather in a room. The last `ready()` (or `request_start` when the host is the only human) moves it to **Starting**.
 2. Your frontend sees `Starting` (from the Room account or a `PhaseChanged` event) and any player sends **your** start-game instruction within `ttl.start` (≤ 300 s), otherwise `tick` cancels the room (StartExpired).
 3. Your start-game instruction reads the roster from `room.seats`, creates your match account storing `room_id` (and anything else you need), and CPIs `begin_match` → Playing.
 4. Your move instructions run while the room is Playing (rules in §5.3).
@@ -226,7 +226,7 @@ on 6001 StaleRematch → re-read old_room: join the new pointer, or create if th
 
 ### 5.2 Begin and end a match (CPI)
 
-`begin_match` / `end_match` do not check that `GameEntry` is Active: a suspended game can still finish the matches already running.
+`begin_match` / `end_match` do not check that `GameEntry` is Active: a suspended game can still start and finish matches in rooms that already exist. Only `init_lobby` and room creation require Active.
 
 ```rust
 declare_program!(lobby);
@@ -246,7 +246,7 @@ lobby::cpi::begin_match(CpiContext::new_with_signer(
 // end: lobby::cpi::end_match(ctx, lobby::types::MatchResult::Completed | Cancelled)
 ```
 
-A complete, tested example lives in `tests/mock-game/src/lib.rs`. It is test-only; never deploy it. Read the roster from `room.seats` in the same transaction as `begin_match`.
+A minimal, tested CPI example lives in [`tests/mock-game/src/lib.rs`](../../tests/mock-game/src/lib.rs). It is test-only (never deploy it) and it **omits the §5.3 checks** — your game must add them. Read the roster from `room.seats` in the same transaction as `begin_match`.
 
 ### 5.3 Rules every game must follow
 1. **Every move instruction takes the `Room` read-only, requires `room.phase == Playing`, and binds the room to the match:** `require!(room.game_program == crate::ID && room.room_id == match.room_id)`.
@@ -296,6 +296,8 @@ Anchor custom errors 6000–6033. They are append-only, so the numbers never cha
 | 6013 | PublicNoHostControl | 6023 | NotInRoster | 6033 | CreateCooldown |
 
 ## 7. Rent, the relayer and cranks
+
+A *crank* is a permissionless maintenance transaction (`tick`, `close_room`, `close_claim`): anyone may send it, and the program decides whether anything happens.
 
 - **Rent on devnet** is `(128 + bytes) × 5 080` lamports:
 
