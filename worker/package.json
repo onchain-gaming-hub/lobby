@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "wrangler dev --test-scheduled",
     "typecheck": "tsc --noEmit && tsc --noEmit -p test",
-    "test": "vitest run",
+    "test": "vitest run && NODE_ENV=production vitest run test/loop.test.ts",
     "deploy": "echo 'deploy needs maintainer approval \u2014 run: npx wrangler deploy' && exit 1"
   },
   "dependencies": {

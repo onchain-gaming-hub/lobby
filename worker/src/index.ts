@@ -1,7 +1,7 @@
 // Lobby Worker — cron backstop for the permissionless lobby cranks (specs/designs/04-worker.md).
 // No privileges, no cache: the program decides every transition; this only finds candidates.
 import { type Address, address, createKeyPairSignerFromBytes, type Instruction, type KeyPairSigner } from '@solana/kit';
-import { fetchByDiscriminator, rpcFor, simulateThenSend, type Outcome } from './chain';
+import { errorFields, fetchByDiscriminator, rpcFor, simulateThenSend, type Outcome } from './chain';
 import { CLAIM, DISC, ROOM, decodeClaim, decodeRoom } from './layout';
 import {
   EXPECTED_REJECTIONS,
@@ -61,7 +61,7 @@ export async function run(job: Job, env: Env, now = Math.floor(Date.now() / 1000
   try {
     await runJob(job, env, now);
   } catch (e) {
-    log({ level: 'error', job, msg: 'run failed', err: String(e) });
+    log({ level: 'error', job, msg: 'run failed', ...errorFields(e) });
   }
 }
 
@@ -98,14 +98,14 @@ async function runJob(job: Job, env: Env, now: number): Promise<void> {
         const out = await simulateThenSend(rpc, signer, blockhash, await c.ix());
         tally[out.kind]++;
         if (out.kind === 'sent') log({ level: 'info', job, account: c.address, outcome: 'sent', signature: out.signature });
-        if (out.kind === 'raced') log({ level: 'info', job, account: c.address, outcome: 'raced', err: out.err });
+        if (out.kind === 'raced') log({ level: 'info', job, account: c.address, outcome: 'raced', ...out.err });
         if (out.kind === 'rejected') {
           const expected = out.code !== null && EXPECTED_REJECTIONS.has(out.code);
           log({ level: expected ? 'info' : 'error', job, account: c.address, outcome: 'rejected', code: out.code, err: stringify(out.err) });
         }
       } catch (e) {
         tally.failed++; // RPC / transport — not a program answer
-        log({ level: 'error', job, account: c.address, msg: String(e) });
+        log({ level: 'error', job, account: c.address, outcome: 'failed', ...errorFields(e) });
       }
     }
   }

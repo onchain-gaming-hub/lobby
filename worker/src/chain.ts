@@ -53,7 +53,7 @@ export type Outcome =
   | { kind: 'sent'; signature: string }
   | { kind: 'noop' } // simulate ok but nothing emitted (tick not due yet)
   | { kind: 'rejected'; code: number | null; err: unknown } // program said no — skip quietly (04 §2)
-  | { kind: 'raced'; err: string }; // simulate ok, preflight of the send failed: state changed in between
+  | { kind: 'raced'; err: ErrorFields }; // simulate ok, the program said no at preflight: state changed in between
 
 /**
  * Simulate first (unsigned — `sigVerify: false`, saves CPU on the many no-op ticks); sign and send only
@@ -82,9 +82,42 @@ export async function simulateThenSend(
   try {
     await rpc.sendTransaction(getBase64EncodedWireTransaction(tx), { encoding: 'base64', preflightCommitment: 'confirmed' }).send();
   } catch (e) {
-    // only a preflight rejection means "state changed since simulate"; 429 / 5xx / transport → caller logs error
-    if (isSolanaError(e, SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE)) return { kind: 'raced', err: String(e) };
+    // "state changed since simulate" only when preflight failed *inside the program* (an InstructionError).
+    // BlockhashNotFound (lagging node) · 429 / 5xx / transport → rethrown → caller logs error (P7 gate F2).
+    if (isSolanaError(e, SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE) && isInstructionError(e.cause)) {
+      return { kind: 'raced', err: errorFields(e) };
+    }
     throw e;
   }
   return { kind: 'sent', signature: getSignatureFromTransaction(tx) };
+}
+
+/** kit's InstructionError codes are 4615xxx (`SOLANA_ERROR__INSTRUCTION_ERROR__*`). */
+function isInstructionError(e: unknown): boolean {
+  return isSolanaError(e) && Math.floor(e.context.__code / 1000) === 4615;
+}
+
+export interface ErrorFields {
+  code?: number; // kit SolanaError code (decode: npx @solana/errors decode -- <code>)
+  status?: number; // HTTP status for transport errors
+  cause?: number; // kit code of the cause (e.g. 4615026 = program Custom error)
+  custom?: number; // program custom error number when the cause carries one
+  error?: string; // non-kit errors only (key not `msg`: spread into log lines that have their own msg)
+}
+
+/**
+ * Structured fields instead of `String(e)`: deployed (NODE_ENV=production) kit drops its messages and
+ * prints only "Solana error #<code>" (P7 gate F1) — the codes survive, the text does not.
+ */
+export function errorFields(e: unknown): ErrorFields {
+  if (!isSolanaError(e)) return { error: String(e).slice(0, 200) };
+  const ctx = e.context as { __code: number; statusCode?: number };
+  const out: ErrorFields = { code: ctx.__code };
+  if (ctx.statusCode !== undefined) out.status = ctx.statusCode;
+  if (isSolanaError(e.cause)) {
+    const cctx = e.cause.context as { __code: number; code?: number | bigint };
+    out.cause = cctx.__code;
+    if (cctx.code !== undefined) out.custom = Number(cctx.code);
+  }
+  return out;
 }
