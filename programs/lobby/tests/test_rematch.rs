@@ -248,3 +248,57 @@ fn live_player_cannot_rematch_into_a_second_room() {
     { let ix = ix_rematch_create(&svm, &game, old, &host.pubkey(), &host.pubkey(), None, nid); ok(send(&mut svm, &[ix], &[&host])); }
     { let ix = ix_rematch_join(&svm, &game, old, &other.pubkey(), nid); assert_err(&send(&mut svm, &[ix], &[&other]), code(E::AlreadyInRoom)); }
 }
+
+/// N1 (accepted): the creator's window is W − 60 + game length — empty if the game ends the second it was created.
+#[test]
+fn p1_creator_zero_window_when_game_ends_same_second() {
+    let (mut svm, g) = game_world();
+    let game = g.program;
+    let host = player(&mut svm);
+    advance(&mut svm, 1);
+    let t0 = now(&svm);
+    let id = create_room(&mut svm, &game, &host);
+    for s in 1..4 { ok(send(&mut svm, &[ix_add_bot(&game, id, &host.pubkey(), s)], &[&host])); }
+    ok(send(&mut svm, &[ix_request_start(&game, id, &host.pubkey())], &[&host]));
+    ok(crank(&mut svm, ix_start_game(&game, id)));
+    ok(crank(&mut svm, ix_finish_game(&game, id, true)));
+    assert_eq!(room(&svm, &game, id).phase_since, t0);
+    for dt in [0i64, 30, 59] {
+        set_time(&mut svm, t0 + dt);
+        let nid = next_room_id(&svm, &game);
+        let ix = ix_rematch_create(&svm, &game, id, &host.pubkey(), &host.pubkey(), None, nid);
+        let r = send(&mut svm, &[ix], &[&host]);
+        assert_err(&r, code(E::CreateCooldown));
+    }
+    set_time(&mut svm, t0 + 60);
+    let nid = next_room_id(&svm, &game);
+    let ix = ix_rematch_create(&svm, &game, id, &host.pubkey(), &host.pubkey(), None, nid);
+    assert_err(&send(&mut svm, &[ix], &[&host]), code(E::RematchClosed));
+}
+
+#[test]
+fn p2_kicked_after_cooldown_gets_stale_not_redirect() {
+    let (mut svm, g) = game_world();
+    let game = g.program;
+    let (old, host, other) = ended_room(&mut svm, &game);
+    let r1 = next_room_id(&svm, &game);
+    { let ix = ix_rematch_create(&svm, &game, old, &host.pubkey(), &host.pubkey(), None, r1); ok(send(&mut svm, &[ix], &[&host])); }
+    { let ix = ix_rematch_join(&svm, &game, old, &other.pubkey(), r1); ok(send(&mut svm, &[ix], &[&other])); }
+    ok(send(&mut svm, &[ix_kick(&game, r1, &host.pubkey(), 1, &other.pubkey())], &[&host]));
+    advance(&mut svm, 10);
+    let nid = next_room_id(&svm, &game);
+    { let ix = ix_rematch_create(&svm, &game, old, &other.pubkey(), &other.pubkey(), Some(r1), nid); assert_err(&send(&mut svm, &[ix], &[&other]), code(E::StaleRematch)); }
+    assert_eq!(room(&svm, &game, old).rematch_room_id, Some(r1));
+}
+
+#[test]
+fn p3_rematch_create_idle_clock() {
+    let (mut svm, g) = game_world();
+    let game = g.program;
+    let (old, host, _) = ended_room(&mut svm, &game);
+    advance(&mut svm, 7);
+    let r1 = next_room_id(&svm, &game);
+    { let ix = ix_rematch_create(&svm, &game, old, &host.pubkey(), &host.pubkey(), None, r1); ok(send(&mut svm, &[ix], &[&host])); }
+    let c: PlayerClaim = read(&svm, &claim_pda(&host.pubkey()));
+    assert_eq!((c.last_joined_at, c.last_created_at), (now(&svm), now(&svm)));
+}

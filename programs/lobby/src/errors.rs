@@ -67,7 +67,7 @@ pub enum LobbyError {
     InvalidSeat,
     #[msg("Arithmetic overflow")]
     MathOverflow,
-    /// Reserved (unused in P0–P3) — kept because codes are append-only.
+    /// Defensive: quick_match_join on a room that is not public (unreachable while invariant 7 holds).
     #[msg("Room account is not the expected PDA")]
     WrongRoom,
     #[msg("Claim has not been idle for CLAIM_IDLE_SECS yet")]

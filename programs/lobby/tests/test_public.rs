@@ -242,3 +242,23 @@ fn live_player_cannot_quick_match_into_a_second_room() {
     let r = { let ix = ix_qm_join(&svm, &game, id, &a.pubkey()); send(&mut svm, &[ix], &[&a]) };
     assert_err(&r, code(E::AlreadyInRoom));
 }
+
+/// prev_room == room on quick_match_join after a ready-timeout revert.
+#[test]
+fn p4_qm_rejoin_same_public_room_after_revert() {
+    let (mut svm, g) = game_world();
+    let game = g.program;
+    let (a, b) = (player(&mut svm), player(&mut svm));
+    let id = qm(&mut svm, &game, &a);
+    qm(&mut svm, &game, &b);
+    advance(&mut svm, 60);
+    ok(crank(&mut svm, ix_tick(&game, id, true)));
+    ok(send(&mut svm, &[ix_ready(&game, id, &a.pubkey())], &[&a]));
+    advance(&mut svm, 30);
+    ok(crank(&mut svm, ix_tick(&game, id, true)));
+    assert_eq!(pointer(&svm, &game), Some(id));
+    let ix = ix_qm_join(&svm, &game, id, &b.pubkey());
+    assert_eq!(ix.accounts[4].pubkey, room_pda(&game, id));
+    ok(send(&mut svm, &[ix], &[&b]));
+    assert_pointer_ok(&svm, &game);
+}
