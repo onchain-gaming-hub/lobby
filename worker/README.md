@@ -27,7 +27,9 @@ Deployed: `npx wrangler secret put RPC_URL` · `npx wrangler secret put WORKER_S
 ## Logs
 
 One JSON line per event · `outcome`: `sent` · `noop` (not logged per account) · `rejected` (simulate said no — `custom` = program error; info if expected 3012/6006/6019/6025/6032, else **error**) · `raced` (simulate ok, program said no at preflight — info) · `failed` (RPC / transport / non-program preflight — **error**).
-Fields: `custom` = program error number in every line · `code` = kit error code (decode: `npx @solana/errors decode -- <code>`) · `status` = HTTP status · `cause` = kit code of the cause · `server` = RPC message · `error` = non-kit error text. Deployed kit prints only codes (NODE_ENV=production), so read the fields, not the text.
+Fields: `custom` = program error number in every line · `code` = kit error code (decode: `npx @solana/errors decode -- <code>`) · `status` = HTTP status · `cause` = kit code of the cause · `server` = RPC message · `error` = non-kit error text. Deployed kit prints only codes (NODE_ENV=production), so read the fields, not the text. `error: "TypeError: …"` from inside kit usually means the RPC sent a malformed JSON-RPC error (no `data`).
+
+`src/index.ts` must export **only `default`** — workerd rejects any other named export of the main module (test/entry.test.ts).
 
 ## Known limits (P7 gate)
 

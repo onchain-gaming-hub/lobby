@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { AccountRole, address, getAddressEncoder } from '@solana/kit';
 import { describe, expect, it } from 'vitest';
-import { CRON_JOBS } from '../src/index';
+import { CRON_JOBS } from '../src/worker';
 import { CLAIM_IDLE_SECS, DISC, Phase, type ClaimView, type RoomView } from '../src/layout';
 import {
   claimMaybeClosable,

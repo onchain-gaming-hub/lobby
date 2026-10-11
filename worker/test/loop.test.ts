@@ -2,7 +2,7 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { address, getAddressEncoder, getBase58Decoder } from '@solana/kit';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { type Env, PAYER_RENT_FLOOR, run } from '../src/index';
+import { type Env, PAYER_RENT_FLOOR, run } from '../src/worker';
 import { DISC, Phase, ROOM } from '../src/layout';
 import { roomPda } from '../src/plan';
 

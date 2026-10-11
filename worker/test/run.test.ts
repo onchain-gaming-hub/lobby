@@ -1,6 +1,6 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { type Env, run } from '../src/index';
+import { type Env, run } from '../src/worker';
 
 /** a real ed25519 keypair in solana-keygen form: secret (32) ‖ public (32) */
 function keygenJson(): string {

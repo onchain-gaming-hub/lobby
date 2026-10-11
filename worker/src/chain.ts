@@ -111,11 +111,11 @@ export interface ErrorFields {
  * prints only "Solana error #<code>" (P7 gate F1) — the codes survive, the text does not.
  */
 export function errorFields(e: unknown): ErrorFields {
-  if (!isSolanaError(e)) return { error: redactUrls(String(e)).slice(0, 200) };
+  if (!isSolanaError(e)) return { error: redactUrls(String(e).slice(0, 1000)).slice(0, 200) }; // bound regex input (O(n²) on long text)
   const ctx = e.context as { __code: number; statusCode?: number; __serverMessage?: string };
   const out: ErrorFields = { code: ctx.__code };
   if (ctx.statusCode !== undefined) out.status = ctx.statusCode;
-  if (typeof ctx.__serverMessage === 'string') out.server = ctx.__serverMessage.slice(0, 200);
+  if (typeof ctx.__serverMessage === 'string') out.server = redactUrls(ctx.__serverMessage.slice(0, 1000)).slice(0, 200);
   if (isSolanaError(e.cause)) {
     const cctx = e.cause.context as { __code: number; code?: number | bigint };
     out.cause = cctx.__code;
