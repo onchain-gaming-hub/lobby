@@ -49,7 +49,8 @@ export async function fetchByDiscriminator(
 export type Outcome =
   | { kind: 'sent'; signature: string }
   | { kind: 'noop' } // simulate ok but nothing emitted (tick not due yet)
-  | { kind: 'rejected'; code: number | null; err: unknown }; // program said no — skip quietly (04 §2)
+  | { kind: 'rejected'; code: number | null; err: unknown } // program said no — skip quietly (04 §2)
+  | { kind: 'raced'; err: string }; // simulate ok, preflight of the send failed: state changed in between
 
 /** Simulate first; send only when the simulation succeeds *and* changed state (04 §2). */
 export async function simulateThenSend(
@@ -70,7 +71,13 @@ export async function simulateThenSend(
   const sim = await rpc.simulateTransaction(wire, { encoding: 'base64', sigVerify: false, commitment: 'confirmed' }).send();
   if (sim.value.err) return { kind: 'rejected', code: customErrorCode(sim.value.err), err: sim.value.err };
   if (!emittedEvent(sim.value.logs)) return { kind: 'noop' };
-  // preflight stays on: a race between simulate and send fails here for free instead of on chain
-  await rpc.sendTransaction(wire, { encoding: 'base64', preflightCommitment: 'confirmed' }).send();
+  // preflight stays on: a race between simulate and send fails here for free instead of on chain.
+  // Accepted (P7 gate N2): if someone else ticks in between, our tick becomes a no-op that still
+  // passes preflight and costs one fee (5,000 lamports) — bounded by how often races happen.
+  try {
+    await rpc.sendTransaction(wire, { encoding: 'base64', preflightCommitment: 'confirmed' }).send();
+  } catch (e) {
+    return { kind: 'raced', err: String(e) };
+  }
   return { kind: 'sent', signature: getSignatureFromTransaction(tx) };
 }

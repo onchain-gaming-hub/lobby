@@ -21,7 +21,10 @@ export interface Env {
   LOBBY_PROGRAM_ID: string;
   /** refuse to run on any other cluster (Golden Rule: devnet only) */
   EXPECTED_GENESIS_HASH: string;
-  /** cap per run — free plan allows 50 subrequests per invocation (2 per candidate + 4 fixed) */
+  /**
+   * cap per run (clamped to MAX_CAP) — subrequests: 4 fixed + 2 per candidate (free plan: 50) ·
+   * CPU: ~0.8 ms per candidate (sign + PDA) vs free plan 10 ms per cron run (P7 gate F1) → 5 on free
+   */
   MAX_CANDIDATES_PER_RUN: string;
   LOW_BALANCE_LAMPORTS: string;
 }
@@ -37,12 +40,16 @@ export const CRON_JOBS: Record<string, Job> = {
 
 /** 1 signature · no priority fee (04 §4). */
 const FEE_LAMPORTS = 5_000n;
+/** a 0-byte system account must stay rent-exempt after paying fees (devnet `solana rent 0`). */
+const PAYER_RENT_FLOOR = 890_880n;
+/** (50 subrequests − 4 fixed) / 2 per candidate */
+export const MAX_CAP = 23;
 
 export default {
-  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+  async scheduled(controller: ScheduledController, env: Env): Promise<void> {
     const job = CRON_JOBS[controller.cron];
     if (!job) return log({ level: 'error', msg: 'unknown cron', cron: controller.cron });
-    ctx.waitUntil(run(job, env));
+    await run(job, env); // awaited: the cron is reported finished only when the work is (P7 gate N5)
   },
   async fetch(): Promise<Response> {
     return new Response('lobby-worker: cron only', { status: 404 });
@@ -60,7 +67,8 @@ export async function run(job: Job, env: Env, now = Math.floor(Date.now() / 1000
 
 async function runJob(job: Job, env: Env, now: number): Promise<void> {
   if (!env.RPC_URL) return log({ level: 'error', job, msg: 'RPC_URL is empty — set it in .dev.vars / wrangler secret' });
-  const limit = Number(env.MAX_CANDIDATES_PER_RUN);
+  if (!URL.canParse(env.RPC_URL)) return log({ level: 'error', job, msg: 'RPC_URL is not a valid URL' }); // never echo it
+  const limit = Math.min(Number(env.MAX_CANDIDATES_PER_RUN), MAX_CAP);
   if (!Number.isInteger(limit) || limit < 1) return log({ level: 'error', job, msg: 'MAX_CANDIDATES_PER_RUN must be a positive integer' });
   const signer = await loadSigner(env.WORKER_SECRET_KEY);
   if (!signer) return log({ level: 'error', job, msg: 'WORKER_SECRET_KEY must be a JSON array of 64 bytes (solana-keygen file)' });
@@ -78,8 +86,8 @@ async function runJob(job: Job, env: Env, now: number): Promise<void> {
 
   const candidates = await findCandidates(job, rpc, program, now);
   const picked = candidates.slice(0, limit);
-  const tally: Record<Outcome['kind'], number> = { sent: 0, noop: 0, rejected: 0 };
-  if (picked.length > 0 && balance < FEE_LAMPORTS * BigInt(picked.length)) {
+  const tally: Record<Outcome['kind'], number> = { sent: 0, noop: 0, rejected: 0, raced: 0 };
+  if (picked.length > 0 && balance < PAYER_RENT_FLOOR + FEE_LAMPORTS * BigInt(picked.length)) {
     // with no fee money every simulate fails at fee-payer load and hides the real program answer
     return log({ level: 'error', job, msg: 'worker wallet cannot pay fees — skipped', wallet: signer.address, candidates: candidates.length });
   }
@@ -90,6 +98,7 @@ async function runJob(job: Job, env: Env, now: number): Promise<void> {
         const out = await simulateThenSend(rpc, signer, blockhash, await c.ix());
         tally[out.kind]++;
         if (out.kind === 'sent') log({ level: 'info', job, account: c.address, outcome: 'sent', signature: out.signature });
+        if (out.kind === 'raced') log({ level: 'info', job, account: c.address, outcome: 'raced', err: out.err });
         if (out.kind === 'rejected') {
           const expected = out.code !== null && EXPECTED_REJECTIONS.has(out.code);
           log({ level: expected ? 'info' : 'error', job, account: c.address, outcome: 'rejected', code: out.code, err: stringify(out.err) });
