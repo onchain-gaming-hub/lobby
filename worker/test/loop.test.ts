@@ -191,7 +191,7 @@ describe('run() tick loop (mocked RPC)', () => {
     await run('tick', env(), NOW);
     expect(rpc.sent()).toEqual([]);
     const rej = lines().filter((l) => l.outcome === 'rejected');
-    expect(rej.map((l) => [l.code, l.level])).toEqual([[6025, 'info'], [6000, 'error']]);
+    expect(rej.map((l) => [l.custom, l.level])).toEqual([[6025, 'info'], [6000, 'error']]);
   });
 
   it('cap is clamped to the subrequest budget', async () => {

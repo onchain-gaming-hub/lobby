@@ -102,6 +102,7 @@ export interface ErrorFields {
   status?: number; // HTTP status for transport errors
   cause?: number; // kit code of the cause (e.g. 4615026 = program Custom error)
   custom?: number; // program custom error number when the cause carries one
+  server?: string; // JSON-RPC server message, when kit kept one
   error?: string; // non-kit errors only (key not `msg`: spread into log lines that have their own msg)
 }
 
@@ -111,9 +112,10 @@ export interface ErrorFields {
  */
 export function errorFields(e: unknown): ErrorFields {
   if (!isSolanaError(e)) return { error: String(e).slice(0, 200) };
-  const ctx = e.context as { __code: number; statusCode?: number };
+  const ctx = e.context as { __code: number; statusCode?: number; __serverMessage?: string };
   const out: ErrorFields = { code: ctx.__code };
   if (ctx.statusCode !== undefined) out.status = ctx.statusCode;
+  if (typeof ctx.__serverMessage === 'string') out.server = ctx.__serverMessage.slice(0, 200);
   if (isSolanaError(e.cause)) {
     const cctx = e.cause.context as { __code: number; code?: number | bigint };
     out.cause = cctx.__code;

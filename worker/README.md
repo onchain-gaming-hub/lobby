@@ -24,6 +24,11 @@ Deployed: `npx wrangler secret put RPC_URL` · `npx wrangler secret put WORKER_S
 
 `npm run typecheck` · `npm test` — layout/discriminators re-derived from `../idls/lobby.json` (0.1.0), PDAs vs `solana find-program-derived-address`, deadline filters vs `handle_tick`, crons vs `wrangler.toml`.
 
+## Logs
+
+One JSON line per event · `outcome`: `sent` · `noop` (not logged per account) · `rejected` (simulate said no — `custom` = program error; info if expected 3012/6006/6019/6025/6032, else **error**) · `raced` (simulate ok, program said no at preflight — info) · `failed` (RPC / transport / non-program preflight — **error**).
+Fields: `custom` = program error number in every line · `code` = kit error code (decode: `npx @solana/errors decode -- <code>`) · `status` = HTTP status · `cause` = kit code of the cause · `server` = RPC message · `error` = non-kit error text. Deployed kit prints only codes (NODE_ENV=production), so read the fields, not the text.
+
 ## Known limits (P7 gate)
 
 - **Free plan**: 10 ms CPU per cron run → cap 5 · check `cpuTime` with `wrangler tail` on the first devnet runs · Workers Paid → raise toward 23.

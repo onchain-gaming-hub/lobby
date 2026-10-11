@@ -98,10 +98,12 @@ async function runJob(job: Job, env: Env, now: number): Promise<void> {
         const out = await simulateThenSend(rpc, signer, blockhash, await c.ix());
         tally[out.kind]++;
         if (out.kind === 'sent') log({ level: 'info', job, account: c.address, outcome: 'sent', signature: out.signature });
+        // raced = info whatever the code: the send carried the exact bytes the simulate just accepted, so a
+        // program error at preflight means chain state moved in between (not a Worker bug)
         if (out.kind === 'raced') log({ level: 'info', job, account: c.address, outcome: 'raced', ...out.err });
         if (out.kind === 'rejected') {
           const expected = out.code !== null && EXPECTED_REJECTIONS.has(out.code);
-          log({ level: expected ? 'info' : 'error', job, account: c.address, outcome: 'rejected', code: out.code, err: stringify(out.err) });
+          log({ level: expected ? 'info' : 'error', job, account: c.address, outcome: 'rejected', custom: out.code, err: stringify(out.err) });
         }
       } catch (e) {
         tally.failed++; // RPC / transport — not a program answer
