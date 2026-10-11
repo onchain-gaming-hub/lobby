@@ -1,0 +1,15 @@
+# Lobby Worker (specs/designs/04-worker.md) — devnet only.
+# Secrets are NOT here: RPC_URL + WORKER_SECRET_KEY → `.dev.vars` (local, gitignored) / `wrangler secret put` (deployed).
+name = "lobby-worker"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+[triggers]
+# must match CRON_JOBS in src/index.ts (test/config.test.ts checks)
+crons = ["* * * * *", "*/10 * * * *", "17 3 * * *"]
+
+[vars]
+LOBBY_PROGRAM_ID = "5zdBSvep3yV6v1SVD67uw9N5Wb3eT9Hp9D3eg4YSRqRu"
+EXPECTED_GENESIS_HASH = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG" # devnet
+MAX_CANDIDATES_PER_RUN = "20"
+LOW_BALANCE_LAMPORTS = "50000000" # 0.05 SOL (04 §6 W-2)

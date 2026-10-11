@@ -1,0 +1,9 @@
+# copy to .dev.vars (gitignored) for `npm run dev`
+# deployed: npx wrangler secret put RPC_URL  /  npx wrangler secret put WORKER_SECRET_KEY
+
+# devnet RPC that supports getProgramAccounts (public: https://api.devnet.solana.com)
+RPC_URL=
+
+# Worker wallet — JSON array of 64 bytes = content of ~/.config/solana/lobby-worker-devnet.json
+# pays fees only (5,000 lamports/tx) · has no privilege in the program (04 §4)
+WORKER_SECRET_KEY=
