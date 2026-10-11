@@ -40,8 +40,8 @@ export const CRON_JOBS: Record<string, Job> = {
 
 /** 1 signature · no priority fee (04 §4). */
 const FEE_LAMPORTS = 5_000n;
-/** a 0-byte system account must stay rent-exempt after paying fees (devnet `solana rent 0`). */
-const PAYER_RENT_FLOOR = 890_880n;
+/** a 0-byte system account must stay rent-exempt after paying fees (`solana rent 0 --url devnet` = 650,240). */
+export const PAYER_RENT_FLOOR = 650_240n;
 /** (50 subrequests − 4 fixed) / 2 per candidate */
 export const MAX_CAP = 23;
 
@@ -86,7 +86,7 @@ async function runJob(job: Job, env: Env, now: number): Promise<void> {
 
   const candidates = await findCandidates(job, rpc, program, now);
   const picked = candidates.slice(0, limit);
-  const tally: Record<Outcome['kind'], number> = { sent: 0, noop: 0, rejected: 0, raced: 0 };
+  const tally: Record<Outcome['kind'] | 'failed', number> = { sent: 0, noop: 0, rejected: 0, raced: 0, failed: 0 };
   if (picked.length > 0 && balance < PAYER_RENT_FLOOR + FEE_LAMPORTS * BigInt(picked.length)) {
     // with no fee money every simulate fails at fee-payer load and hides the real program answer
     return log({ level: 'error', job, msg: 'worker wallet cannot pay fees — skipped', wallet: signer.address, candidates: candidates.length });
@@ -104,7 +104,7 @@ async function runJob(job: Job, env: Env, now: number): Promise<void> {
           log({ level: expected ? 'info' : 'error', job, account: c.address, outcome: 'rejected', code: out.code, err: stringify(out.err) });
         }
       } catch (e) {
-        tally.rejected++;
+        tally.failed++; // RPC / transport — not a program answer
         log({ level: 'error', job, account: c.address, msg: String(e) });
       }
     }

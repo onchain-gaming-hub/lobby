@@ -7,7 +7,7 @@ No privileges, no cache: each run reads the chain, simulates, and sends only whe
 |------|-----|-----------------------------------------------|
 | `* * * * *` | `tick` | Rooms with a deadline that may have passed |
 | `*/10 * * * *` | `close_room` | Ended/Cancelled rooms past `retention` → rent back to `rent_payer` |
-| `17 * * * *` | `close_claim` (hourly · cap 20/run) | claims idle ≥ 30 days (program checks liveness + kick) |
+| `17 * * * *` | `close_claim` (hourly · cap = `MAX_CANDIDATES_PER_RUN`) | claims idle ≥ 30 days (program checks liveness + kick) |
 
 ## Env
 
@@ -28,6 +28,6 @@ Deployed: `npx wrangler secret put RPC_URL` · `npx wrangler secret put WORKER_S
 
 - **Free plan**: 10 ms CPU per cron run → cap 5 · check `cpuTime` with `wrangler tail` on the first devnet runs · Workers Paid → raise toward 23.
 - **5 cron triggers per account (free)** — this Worker uses 3; other hub Workers on the same account count too.
-- `getProgramAccounts` is unpaged — fine on devnet, measure before mainnet.
+- `getProgramAccounts` is unpaged and `tick` decodes every Room each minute (CPU grows with room count, not bounded by the cap) — fine on devnet, measure before mainnet.
 - A tick that races another cranker after our simulate lands as a paid no-op (5,000 lamports) — accepted.
-- ~20 claims that stay `ClaimLive` forever would sit at the head of `close_claim`'s oldest-first queue — revisit with the indexer (6a).
+- ≥ cap claims that stay `ClaimLive` forever would sit at the head of `close_claim`'s oldest-first queue — revisit with the indexer (6a).

@@ -4,13 +4,16 @@ import {
   type Base58EncodedBytes,
   type Instruction,
   type KeyPairSigner,
+  SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE,
   appendTransactionMessageInstruction,
+  compileTransaction,
   createSolanaRpc,
   createTransactionMessage,
   getBase58Decoder,
   getBase64EncodedWireTransaction,
   getBase64Encoder,
   getSignatureFromTransaction,
+  isSolanaError,
   pipe,
   setTransactionMessageFeePayerSigner,
   setTransactionMessageLifetimeUsingBlockhash,
@@ -52,32 +55,36 @@ export type Outcome =
   | { kind: 'rejected'; code: number | null; err: unknown } // program said no — skip quietly (04 §2)
   | { kind: 'raced'; err: string }; // simulate ok, preflight of the send failed: state changed in between
 
-/** Simulate first; send only when the simulation succeeds *and* changed state (04 §2). */
+/**
+ * Simulate first (unsigned — `sigVerify: false`, saves CPU on the many no-op ticks); sign and send only
+ * when the simulation succeeds *and* changed state (04 §2).
+ */
 export async function simulateThenSend(
   rpc: Rpc,
   signer: KeyPairSigner,
   blockhash: Blockhash,
   ix: Instruction,
 ): Promise<Outcome> {
-  const tx = await signTransactionMessageWithSigners(
-    pipe(
-      createTransactionMessage({ version: 0 }),
-      (m) => setTransactionMessageFeePayerSigner(signer, m),
-      (m) => setTransactionMessageLifetimeUsingBlockhash(blockhash, m),
-      (m) => appendTransactionMessageInstruction(ix, m),
-    ),
+  const message = pipe(
+    createTransactionMessage({ version: 0 }),
+    (m) => setTransactionMessageFeePayerSigner(signer, m),
+    (m) => setTransactionMessageLifetimeUsingBlockhash(blockhash, m),
+    (m) => appendTransactionMessageInstruction(ix, m),
   );
-  const wire = getBase64EncodedWireTransaction(tx);
-  const sim = await rpc.simulateTransaction(wire, { encoding: 'base64', sigVerify: false, commitment: 'confirmed' }).send();
+  const unsigned = getBase64EncodedWireTransaction(compileTransaction(message));
+  const sim = await rpc.simulateTransaction(unsigned, { encoding: 'base64', sigVerify: false, commitment: 'confirmed' }).send();
   if (sim.value.err) return { kind: 'rejected', code: customErrorCode(sim.value.err), err: sim.value.err };
   if (!emittedEvent(sim.value.logs)) return { kind: 'noop' };
+  const tx = await signTransactionMessageWithSigners(message);
   // preflight stays on: a race between simulate and send fails here for free instead of on chain.
   // Accepted (P7 gate N2): if someone else ticks in between, our tick becomes a no-op that still
   // passes preflight and costs one fee (5,000 lamports) — bounded by how often races happen.
   try {
-    await rpc.sendTransaction(wire, { encoding: 'base64', preflightCommitment: 'confirmed' }).send();
+    await rpc.sendTransaction(getBase64EncodedWireTransaction(tx), { encoding: 'base64', preflightCommitment: 'confirmed' }).send();
   } catch (e) {
-    return { kind: 'raced', err: String(e) };
+    // only a preflight rejection means "state changed since simulate"; 429 / 5xx / transport → caller logs error
+    if (isSolanaError(e, SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE)) return { kind: 'raced', err: String(e) };
+    throw e;
   }
   return { kind: 'sent', signature: getSignatureFromTransaction(tx) };
 }

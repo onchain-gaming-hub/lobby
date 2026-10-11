@@ -2,7 +2,7 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { address, getAddressEncoder, getBase58Decoder } from '@solana/kit';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { type Env, run } from '../src/index';
+import { type Env, PAYER_RENT_FLOOR, run } from '../src/index';
 import { DISC, Phase, ROOM } from '../src/layout';
 import { roomPda } from '../src/plan';
 
@@ -35,6 +35,8 @@ interface Mock {
   rooms: { id: bigint; phaseSince: number }[];
   /** room ids whose simulation emits an event (others are no-ops) */
   emits: Set<bigint>;
+  sendStatus?: number;
+  sendPreflightFails?: boolean;
 }
 
 async function mockRpc(m: Mock) {
@@ -56,6 +58,11 @@ async function mockRpc(m: Mock) {
   vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
     const req = JSON.parse(String(init.body)) as { id: number; method: string; params: unknown[] };
     calls.push({ method: req.method, params: req.params });
+    if (req.method === 'sendTransaction' && m.sendStatus) return new Response('', { status: m.sendStatus });
+    if (req.method === 'sendTransaction' && m.sendPreflightFails) {
+      const error = { code: -32002, message: 'Transaction simulation failed', data: { err: { InstructionError: [0, { Custom: 3012 }] }, logs: [], accounts: null, unitsConsumed: 0, returnData: null } };
+      return new Response(JSON.stringify({ jsonrpc: '2.0', id: req.id, error }), { headers: { 'content-type': 'application/json' } });
+    }
     const result = (() => {
       switch (req.method) {
         case 'getGenesisHash':
@@ -119,25 +126,48 @@ describe('run() tick loop (mocked RPC)', () => {
     expect(rpc.simulated()).toEqual([2n, 3n]); // oldest deadlines, cap 2
     expect(rpc.sent()).toEqual([2n]); // 3 simulated as no-op → not sent
     const done = lines().find((l) => l.msg === 'done')!;
-    expect(done).toMatchObject({ candidates: 3, deferred: 1, sent: 1, noop: 1, rejected: 0, raced: 0 });
+    expect(done).toMatchObject({ candidates: 3, deferred: 1, sent: 1, noop: 1, rejected: 0, raced: 0, failed: 0 });
   });
 
-  it('wallet below rent floor + fees → no simulate, no send, one error', async () => {
+  it('wallet below rent floor + fees → no simulate, no send, one error · exactly enough → runs', async () => {
+    const two = [{ id: 1n, phaseSince: 0 }, { id: 2n, phaseSince: 0 }];
+    const need = Number(PAYER_RENT_FLOOR) + 2 * 5_000;
     vi.spyOn(console, 'log').mockImplementation(() => {});
-    const rpc = await mockRpc({ balance: 890_880 + 5_000, rooms: [{ id: 1n, phaseSince: 0 }, { id: 2n, phaseSince: 0 }], emits: new Set([1n, 2n]) });
+    let rpc = await mockRpc({ balance: need - 1, rooms: two, emits: new Set([1n, 2n]) });
     await run('tick', env(), NOW);
     expect(rpc.simulated()).toEqual([]);
     expect(rpc.sent()).toEqual([]);
     expect(lines().some((l) => l.level === 'error' && String(l.msg).includes('cannot pay fees'))).toBe(true);
+    rpc = await mockRpc({ balance: need, rooms: two, emits: new Set([1n, 2n]) });
+    await run('tick', env(), NOW);
+    expect(rpc.sent()).toEqual([1n, 2n]);
+  });
+
+  it('send failing for a non-race reason (HTTP 429) is an error, not `raced`', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    await mockRpc({ balance: 1_000_000_000, rooms: [{ id: 1n, phaseSince: 0 }], emits: new Set([1n]), sendStatus: 429 });
+    await run('tick', env(), NOW);
+    expect(lines().some((l) => l.outcome === 'raced')).toBe(false);
+    expect(lines().some((l) => l.level === 'error' && String(l.msg).includes('429'))).toBe(true);
+    expect(lines().find((l) => l.msg === 'done')).toMatchObject({ sent: 0, raced: 0, failed: 1 });
+  });
+
+  it('preflight rejection after a good simulate → `raced` at info', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    await mockRpc({ balance: 1_000_000_000, rooms: [{ id: 1n, phaseSince: 0 }], emits: new Set([1n]), sendPreflightFails: true });
+    await run('tick', env(), NOW);
+    expect(lines().find((l) => l.outcome === 'raced')).toMatchObject({ level: 'info' });
+    expect(lines().find((l) => l.msg === 'done')).toMatchObject({ sent: 0, raced: 1, failed: 0 });
   });
 
   it('cap is clamped to the subrequest budget', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     const rooms = Array.from({ length: 30 }, (_, i) => ({ id: BigInt(i + 1), phaseSince: 0 }));
-    const rpc = await mockRpc({ balance: 1_000_000_000, rooms, emits: new Set() });
+    const rpc = await mockRpc({ balance: 1_000_000_000, rooms, emits: new Set(rooms.map((r) => r.id)) }); // worst case: all send
     await run('tick', env({ MAX_CANDIDATES_PER_RUN: '1000' }), NOW);
     expect(rpc.simulated()).toHaveLength(23);
-    expect(rpc.calls.length).toBeLessThanOrEqual(50);
+    expect(rpc.sent()).toHaveLength(23);
+    expect(rpc.calls.length).toBe(50);
   });
 
   it('malformed RPC_URL is not echoed', async () => {
