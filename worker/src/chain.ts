@@ -111,7 +111,7 @@ export interface ErrorFields {
  * prints only "Solana error #<code>" (P7 gate F1) — the codes survive, the text does not.
  */
 export function errorFields(e: unknown): ErrorFields {
-  if (!isSolanaError(e)) return { error: String(e).slice(0, 200) };
+  if (!isSolanaError(e)) return { error: redactUrls(String(e)).slice(0, 200) };
   const ctx = e.context as { __code: number; statusCode?: number; __serverMessage?: string };
   const out: ErrorFields = { code: ctx.__code };
   if (ctx.statusCode !== undefined) out.status = ctx.statusCode;
@@ -122,4 +122,9 @@ export function errorFields(e: unknown): ErrorFields {
     if (cctx.code !== undefined) out.custom = Number(cctx.code);
   }
   return out;
+}
+
+/** Non-kit error text (e.g. workerd fetch errors) can quote the RPC URL with its API key — drop any URL. */
+export function redactUrls(s: string): string {
+  return s.replace(/[a-z][a-z0-9+.-]*:\/\/\S+/gi, '<url>');
 }

@@ -204,6 +204,25 @@ describe('run() tick loop (mocked RPC)', () => {
     expect(rpc.calls.length).toBe(50);
   });
 
+  it('non-http scheme (typo) is refused before any fetch · not echoed', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const rpc = await mockRpc({ balance: 1, rooms: [], emits: new Set() });
+    await run('tick', env({ RPC_URL: 'htps://rpc.example.com/?api-key=SECRET123' }), NOW);
+    expect(rpc.calls).toEqual([]);
+    expect(lines()[0]).toMatchObject({ level: 'error', msg: 'RPC_URL must be an http(s) URL' });
+    expect(JSON.stringify(lines())).not.toContain('SECRET123');
+  });
+
+  it('a non-kit error quoting a URL is redacted', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.stubGlobal('fetch', async () => {
+      throw new TypeError('Fetch API cannot load: https://rpc.example.com/?api-key=SECRET123');
+    });
+    await run('tick', env({ RPC_URL: 'https://rpc.example.com/?api-key=SECRET123' }), NOW);
+    expect(lines()[0]).toMatchObject({ level: 'error', msg: 'run failed', error: 'TypeError: Fetch API cannot load: <url>' });
+    expect(JSON.stringify(lines())).not.toContain('SECRET123');
+  });
+
   it('malformed RPC_URL is not echoed', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     await run('tick', env({ RPC_URL: 'not a url?api-key=SECRET123' }), NOW);

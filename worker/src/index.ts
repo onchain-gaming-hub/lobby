@@ -67,7 +67,9 @@ export async function run(job: Job, env: Env, now = Math.floor(Date.now() / 1000
 
 async function runJob(job: Job, env: Env, now: number): Promise<void> {
   if (!env.RPC_URL) return log({ level: 'error', job, msg: 'RPC_URL is empty — set it in .dev.vars / wrangler secret' });
-  if (!URL.canParse(env.RPC_URL)) return log({ level: 'error', job, msg: 'RPC_URL is not a valid URL' }); // never echo it
+  // never echo it (may carry an API key) · canParse alone accepts `htps://…`, which workerd then
+  // rejects with the full URL in the error text (P7 gate R3-1)
+  if (!isHttpUrl(env.RPC_URL)) return log({ level: 'error', job, msg: 'RPC_URL must be an http(s) URL' });
   const limit = Math.min(Number(env.MAX_CANDIDATES_PER_RUN), MAX_CAP);
   if (!Number.isInteger(limit) || limit < 1) return log({ level: 'error', job, msg: 'MAX_CANDIDATES_PER_RUN must be a positive integer' });
   const signer = await loadSigner(env.WORKER_SECRET_KEY);
@@ -152,6 +154,15 @@ async function findCandidates(job: Job, rpc: ReturnType<typeof rpcFor>, program:
     }
   }
   return out.sort((x, y) => x.dueAt - y.dueAt);
+}
+
+function isHttpUrl(s: string): boolean {
+  try {
+    const { protocol } = new URL(s);
+    return protocol === 'https:' || protocol === 'http:';
+  } catch {
+    return false;
+  }
 }
 
 function stringify(v: unknown): string {
