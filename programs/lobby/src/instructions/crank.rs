@@ -132,7 +132,7 @@ pub struct CloseClaim<'info> {
     pub prev_room: Option<UncheckedAccount<'info>>,
 }
 
-/// Anyone (L13) — but only after CLAIM_IDLE_SECS of no joins (L13 (c) · maintainer 2026-10-10): closing earlier
+/// Anyone (L13) — but only after CLAIM_IDLE_SECS of no joins (L13 (c) · 2026-10-10): closing earlier
 /// would force a fresh `init_claim` on the player's next join and burn the relayer's rent budget (SKILL §3.11).
 pub fn handle_close_claim(ctx: Context<CloseClaim>) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;

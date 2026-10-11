@@ -18,7 +18,7 @@ No privileges, no cache: each run reads the chain, simulates, and sends only whe
 | `LOBBY_PROGRAM_ID` · `EXPECTED_GENESIS_HASH` · `MAX_CANDIDATES_PER_RUN` · `LOW_BALANCE_LAMPORTS` | `wrangler.toml` | program · devnet guard (refuses any other cluster) · per-run cap (default 5: free-plan CPU 10 ms/run · max 23: 50 subrequests) · low-balance warning (0.05 SOL) |
 
 Local: `cp .dev.vars.example .dev.vars` → fill → `npm run dev` → `curl "http://localhost:8787/__scheduled?cron=*+*+*+*+*"`.
-Deployed: `npx wrangler secret put RPC_URL` · `npx wrangler secret put WORKER_SECRET_KEY` · `npx wrangler deploy` — **deploy needs maintainer's approval**.
+Deployed: `npx wrangler secret put RPC_URL` · `npx wrangler secret put WORKER_SECRET_KEY` · `npx wrangler deploy` — **deploy needs approval from a hub maintainer**.
 
 ## Checks
 
