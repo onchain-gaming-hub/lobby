@@ -13,7 +13,7 @@ No privileges, no cache: each run reads the chain, simulates, and sends only whe
 
 | name | where | what |
 |------|-------|------|
-| `RPC_URL` | secret | devnet RPC with `getProgramAccounts` · **maintainer fills** |
+| `RPC_URL` | secret | devnet RPC with `getProgramAccounts` (Alchemy devnet · set 2026-10-11) |
 | `WORKER_SECRET_KEY` | secret | JSON array (64 bytes) of `~/.config/solana/lobby-worker-devnet.json` · wallet `AvoF2kV5iiuu2bk7BAho98Nu7MQEtbhn8udzxVzb8wRE` · fees only |
 | `LOBBY_PROGRAM_ID` · `EXPECTED_GENESIS_HASH` · `MAX_CANDIDATES_PER_RUN` · `LOW_BALANCE_LAMPORTS` | `wrangler.toml` | program · devnet guard (refuses any other cluster) · per-run cap (default 5: free-plan CPU 10 ms/run · max 23: 50 subrequests) · low-balance warning (0.05 SOL) |
 
