@@ -46,7 +46,6 @@ export const PAYER_RENT_FLOOR = 650_240n;
 /** (50 subrequests − 4 fixed) / 2 per candidate */
 export const MAX_CAP = 23;
 
-
 /** Never throws — every failure ends as one structured log line. */
 export async function run(job: Job, env: Env, now = Math.floor(Date.now() / 1000)): Promise<void> {
   try {

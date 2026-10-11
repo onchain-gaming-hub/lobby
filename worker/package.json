@@ -6,7 +6,8 @@
     "dev": "wrangler dev --test-scheduled",
     "typecheck": "tsc --noEmit && tsc --noEmit -p test",
     "test": "vitest run && NODE_ENV=production vitest run test/loop.test.ts",
-    "deploy": "echo 'deploy needs maintainer approval \u2014 run: npx wrangler deploy' && exit 1"
+    "deploy": "echo 'deploy needs maintainer approval \u2014 run: npx wrangler deploy' && exit 1",
+    "check:bundle": "wrangler deploy --dry-run --outdir .wrangler/check"
   },
   "dependencies": {
     "@solana/kit": "8.4.0"

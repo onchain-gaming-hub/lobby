@@ -22,7 +22,7 @@ Deployed: `npx wrangler secret put RPC_URL` · `npx wrangler secret put WORKER_S
 
 ## Checks
 
-`npm run typecheck` · `npm test` — layout/discriminators re-derived from `../idls/lobby.json` (0.1.0), PDAs vs `solana find-program-derived-address`, deadline filters vs `handle_tick`, crons vs `wrangler.toml`.
+`npm run typecheck` · `npm test` · `npm run check:bundle` (bundle, no upload) — and before any deploy, **boot it**: `npm run dev` with fake `.dev.vars` → `curl "http://localhost:8787/__scheduled?cron=*+*+*+*+*"` (vitest runs in Node and cannot see workerd load errors — P7 R4-1). layout/discriminators re-derived from `../idls/lobby.json` (0.1.0), PDAs vs `solana find-program-derived-address`, deadline filters vs `handle_tick`, crons vs `wrangler.toml`.
 
 ## Logs
 
