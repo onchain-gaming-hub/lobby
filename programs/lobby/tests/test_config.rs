@@ -68,7 +68,7 @@ fn init_twice_fails() {
     let game = Pubkey::new_unique();
     let g = setup_game(&mut svm, game, default_params());
     let r = send(&mut svm, &[ix_init_lobby(&game, &g.owner.pubkey(), default_params())], &[&g.owner]);
-    assert!(r.is_err());
+    assert_err(&r, 0); // System AccountAlreadyInUse — config/matchmaker can never be re-created (room_id uniqueness)
 }
 
 #[test]

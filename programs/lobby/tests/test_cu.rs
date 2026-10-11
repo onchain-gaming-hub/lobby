@@ -1,4 +1,6 @@
 //! P5 — compute units per instruction (LiteSVM runs the same SBF program; CU ≈ on-chain).
+//! Numbers are SAMPLES: `find_program_address` cost varies with the key (bump search), e.g.
+//! `init_claim` ranges ~7k–12k across random players. The ceiling assert is what matters.
 //! Prints `CU <ix> <case> <units>` (run with `--nocapture`) and asserts a generous ceiling so a
 //! regression is noticed. Worst cases use max_seats = 8 (prev_room / room deserialization grows with seats).
 mod common;
@@ -83,6 +85,10 @@ fn measure_all() {
         cu("rematch_create", case, ok({ let ix = ix_rematch_create(&svm, &game, id, &host.pubkey(), &host.pubkey(), None, r1); send(&mut svm, &[ix], &[&host]) }));
         cu("rematch_join", case, ok({ let ix = ix_rematch_join(&svm, &game, id, &others[1].pubkey(), r1); send(&mut svm, &[ix], &[&others[1]]) }));
         cu("leave_room", case, ok(send(&mut svm, &[ix_leave_room(&game, r1, &others[1].pubkey(), false)], &[&others[1]])));
+        // rematch_create that must deserialize a stale proof (host leaves → r1 cancelled)
+        ok(send(&mut svm, &[ix_leave_room(&game, r1, &host.pubkey(), false)], &[&host]));
+        let r2 = next_room_id(&svm, &game);
+        cu("rematch_create", &format!("{case} stale proof"), ok({ let ix = ix_rematch_create(&svm, &game, id, &others[0].pubkey(), &others[0].pubkey(), Some(r1), r2); send(&mut svm, &[ix], &[&others[0]]) }));
         // tick no-op · close_room · close_claim
         cu("tick", &format!("{case} no-op"), ok(crank(&mut svm, ix_tick(&game, r1, false))));
         advance(&mut svm, 600);
@@ -108,5 +114,19 @@ fn measure_all() {
         cu("tick", &format!("{case} public backfill"), ok(crank(&mut svm, ix_tick(&game, bid, true))));
         advance(&mut svm, 30);
         cu("tick", &format!("{case} ready-timeout cancel"), ok(crank(&mut svm, ix_tick(&game, bid, true))));
+
+        // tick ReadyCheck → Waiting revert (public: purge bots + re-open pointer)
+        let (c1, c2) = (player(&mut svm), player(&mut svm));
+        let vid = next_room_id(&svm, &game);
+        { let ix = ix_qm_create(&svm, &game, &c1.pubkey(), &c1.pubkey(), vid); ok(send(&mut svm, &[ix], &[&c1])); }
+        { let ix = ix_qm_join(&svm, &game, vid, &c2.pubkey()); ok(send(&mut svm, &[ix], &[&c2])); }
+        advance(&mut svm, 60);
+        ok(crank(&mut svm, ix_tick(&game, vid, true)));
+        ok(send(&mut svm, &[ix_ready(&game, vid, &c1.pubkey())], &[&c1]));
+        advance(&mut svm, 30);
+        cu("tick", &format!("{case} ready-timeout revert"), ok(crank(&mut svm, ix_tick(&game, vid, true))));
+        // leave_room cancelling a public room (writes the matchmaker)
+        cu("leave_room", &format!("{case} last human → cancel public"), ok(send(&mut svm, &[ix_leave_room(&game, vid, &c1.pubkey(), true)], &[&c1])));
+
     }
 }
