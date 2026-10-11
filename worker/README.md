@@ -1,6 +1,6 @@
 # lobby-worker
 
-Cloudflare cron backstop for the permissionless lobby cranks — design: [`../specs/designs/04-worker.md`](../specs/designs/04-worker.md).
+Cloudflare cron backstop for the permissionless lobby cranks — see the integration guide [§7](../skills/lobby-integration/SKILL.md#7-rent-the-relayer-and-cranks).
 No privileges, no cache: each run reads the chain, simulates, and sends only when the program accepts **and** emits an event.
 
 | cron | job | finds (`getProgramAccounts`, raw prefix only) |

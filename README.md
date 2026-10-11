@@ -39,7 +39,7 @@ Simplified: a ready check can also fall back to Waiting, and a solo host can go 
 | `idls/` | The published IDL, its frozen snapshot, and the platform-core IDL used by `declare_program!` |
 | `worker/` | Lobby Worker: Cloudflare cron that cranks `tick`, `close_room` and `close_claim` ([README](worker/README.md)) |
 | `skills/lobby-integration/` | The integration guide (`SKILL.md`) |
-| `specs/designs/` | Design notes (Thai). The relayer registration values are also given in English in the SKILL guide (§7). |
+| `docs/relayer-registration.md` | Values for registering lobby instructions on the hub's gasless relayer (checked against the IDL by a test) |
 
 ## Build and test
 

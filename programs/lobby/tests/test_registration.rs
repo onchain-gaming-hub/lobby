@@ -1,12 +1,12 @@
-//! 06-relayer-registration.md must match idls/lobby.json — the relayer is registered from that doc.
+//! docs/relayer-registration.md must match idls/lobby.json — the relayer is registered from that doc.
 //! (Run through scripts/test.sh so idls/lobby.json is regenerated from the current source.)
 use {::lobby::*, anchor_lang::Space, std::collections::BTreeSet};
 
 fn idl() -> serde_json::Value {
     serde_json::from_str(include_str!("../../../idls/lobby.json")).unwrap()
 }
-const DOC: &str = include_str!("../../../specs/designs/06-relayer-registration.md");
-const DEVNET_LAMPORTS_PER_BYTE: u64 = 5_080; // verified 2026-10-11 (06 §1)
+const DOC: &str = include_str!("../../../docs/relayer-registration.md");
+const DEVNET_LAMPORTS_PER_BYTE: u64 = 5_080; // verified on devnet 2026-10-11 (docs/relayer-registration.md §1)
 
 fn rent(bytes: usize) -> u64 {
     (128 + bytes as u64) * DEVNET_LAMPORTS_PER_BYTE
@@ -34,7 +34,7 @@ fn sponsored_rows_match_the_idl_exactly() {
     let idl = idl();
     let ixs = idl["instructions"].as_array().unwrap();
     let rows = section("## 1.");
-    assert_eq!(rows.len(), 15, "06 §1 must list all 15 sponsored ixs");
+    assert_eq!(rows.len(), 15, "§1 must list all 15 sponsored ixs");
     for cols in rows {
         let name = names(&cols[1])[0].clone();
         let ix = ixs.iter().find(|i| i["name"] == name.as_str()).unwrap_or_else(|| panic!("{name} not in IDL"));
@@ -74,7 +74,7 @@ fn sponsored_plus_not_sponsored_is_exactly_the_idl() {
             }
         }
     }
-    assert_eq!(doc, idl, "every IDL ix must be in exactly one of 06 §1 / §2");
+    assert_eq!(doc, idl, "every IDL ix must be in exactly one of §1 / §2");
 }
 
 #[test]

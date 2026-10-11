@@ -1,4 +1,4 @@
-# Lobby Worker (specs/designs/04-worker.md) — devnet only.
+# Lobby Worker (see README.md) — devnet only.
 # Secrets are NOT here: RPC_URL + WORKER_SECRET_KEY → `.dev.vars` (local, gitignored) / `wrangler secret put` (deployed).
 name = "lobby-worker"
 main = "src/index.ts"

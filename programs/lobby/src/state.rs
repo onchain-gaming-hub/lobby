@@ -1,4 +1,4 @@
-//! Accounts (specs/designs/01-accounts.md). Borsh layout — never reorder fields / enum variants.
+//! Accounts (design notes: 01-accounts). Borsh layout — never reorder fields / enum variants.
 //! Fields that off-chain code memcmps sit before the first `Option`/`Vec` (01 §0).
 use anchor_lang::prelude::*;
 

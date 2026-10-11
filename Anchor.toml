@@ -3,7 +3,7 @@ anchor_version = "1.2.1"
 solana_version = "4.3.0"
 
 [workspace]
-# programs/lobby = the program (specs/designs/).
+# programs/lobby = the program.
 # tests/mock-game is TEST ONLY (built separately by scripts/test.sh) — never deploy.
 members = ["programs/lobby"]
 

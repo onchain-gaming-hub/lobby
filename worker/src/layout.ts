@@ -1,4 +1,4 @@
-// Raw account layout of lobby IDL 0.1.0 (specs/designs/01-accounts.md · 04 §2).
+// Raw account layout of lobby IDL 0.1.0 (programs/lobby/src/state.rs).
 // Only fields before the first Option/Vec are read raw — later offsets move (01 §0).
 // test/layout.test.ts re-derives every number here from idls/lobby.json.
 

@@ -312,7 +312,7 @@ A *crank* is a permissionless maintenance transaction (`tick`, `close_room`, `cl
   - Only the four $ instructions take a payer slot, at index 1.
   - Player-facing instructions can be fee-sponsored (table below). `init_lobby` / `update_config` are signed by the game owner's own wallet, and `close_room` / `close_claim` are run by cranks with their own wallets: these four are **not** sponsored. `begin_match` / `end_match` are sponsored, if at all, as part of the game's own instruction.
   - When sending `tick` through the relayer, append the user as a trailing **read-only signer**. `tick` ignores `remaining_accounts`.
-  - Registration values (also in `specs/designs/06-relayer-registration.md`, Thai). Data length is 8 (discriminator only) or 9 (`+ seat: u8`). Max CU measured ≈ 38k, so no ComputeBudget instruction is needed. Retryable codes: 6000–6003 and 3012.
+  - Registration values (full version with CU samples and project values: [`docs/relayer-registration.md`](../../docs/relayer-registration.md)). Data length is 8 (discriminator only) or 9 (`+ seat: u8`). Max CU measured ≈ 38k, so no ComputeBudget instruction is needed. Retryable codes: 6000–6003 and 3012.
 
     | Instruction | Discriminator (hex) | Accounts | Payer index | `max_rent_lamports` |
     |---|---|---|---|---|

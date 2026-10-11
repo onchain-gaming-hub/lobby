@@ -1,6 +1,6 @@
 //! lobby — rooms / matchmaking / readyCheck / rematch for blockchain-games-hub.
 //!
-//! Design: `specs/designs/` (01 accounts · 02 instructions · 03 proposals · 04 worker).
+//! Integration guide: `skills/lobby-integration/SKILL.md`. Design notes are kept in the hub's private specs repo.
 //! Games CPI `begin_match` / `end_match` signed by their `[b"game_authority"]` PDA (L4).
 //! Every deadline has a permissionless `tick`; claims are derived, never released (02 §2).
 #![allow(unexpected_cfgs)]

@@ -1,4 +1,4 @@
-// Lobby Worker logic — cron backstop for the permissionless lobby cranks (specs/designs/04-worker.md).
+// Lobby Worker logic — cron backstop for the permissionless lobby cranks (see ../README.md).
 // No privileges, no cache: the program decides every transition; this only finds candidates.
 // Entry point is src/index.ts (default export only — workerd rejects other named exports of the main module).
 import { type Address, address, createKeyPairSignerFromBytes, type Instruction, type KeyPairSigner } from '@solana/kit';
