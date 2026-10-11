@@ -71,3 +71,41 @@ fn closed_room_returns_retryable_3012() {
     assert_err(&r, 3012);
     assert_err(&crank(&mut svm, ix_tick(&game, id, false)), 3012);
 }
+
+#[test]
+fn update_config_with_another_games_entry_is_rejected() {
+    // B's owner passes B's entry with A's config → entry is seed-bound to config.game_program
+    let mut svm = new_svm();
+    let (a, b) = (Pubkey::new_unique(), Pubkey::new_unique());
+    setup_game(&mut svm, a, default_params());
+    let gb = setup_game(&mut svm, b, default_params());
+    let mut ix = ix_update_config(&a, &gb.owner.pubkey(), default_params());
+    ix.accounts[1].pubkey = game_entry_pda(&b);
+    assert_err(&send(&mut svm, &[ix], &[&gb.owner]), SEEDS);
+}
+
+#[test]
+fn rematch_create_cannot_bypass_suspend_with_another_games_entry() {
+    let (mut svm, g) = game_world();
+    let game = g.program;
+    let other = Pubkey::new_unique();
+    setup_game(&mut svm, other, default_params());
+    let (old, host, _) = ended_room(&mut svm, &game);
+    put_game_entry(&mut svm, &game, &g.owner.pubkey(), true); // suspend the mock game
+    let nid = next_room_id(&svm, &game);
+    { let ix = ix_rematch_create(&svm, &game, old, &host.pubkey(), &host.pubkey(), None, nid); assert_err(&send(&mut svm, &[ix], &[&host]), code(::lobby::errors::LobbyError::GameNotActive)); }
+    let mut ix = ix_rematch_create(&svm, &game, old, &host.pubkey(), &host.pubkey(), None, nid);
+    ix.accounts[2].pubkey = game_entry_pda(&other);
+    assert_err(&send(&mut svm, &[ix], &[&host]), SEEDS);
+}
+
+#[test]
+fn quick_match_create_on_a_suspended_game_is_game_not_active() {
+    let mut svm = new_svm();
+    let a = Pubkey::new_unique();
+    let ga = setup_game(&mut svm, a, default_params());
+    put_game_entry(&mut svm, &a, &ga.owner.pubkey(), true);
+    let p = player(&mut svm);
+    let ix = ix_qm_create(&svm, &a, &p.pubkey(), &p.pubkey(), next_room_id(&svm, &a));
+    assert_err(&send(&mut svm, &[ix], &[&p]), code(::lobby::errors::LobbyError::GameNotActive));
+}

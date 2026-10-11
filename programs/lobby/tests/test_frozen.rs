@@ -1,6 +1,15 @@
 //! IDL 0.1.0 freeze: error numbers and enum order are registered with the relayer (retryable codes)
 //! and baked into games / indexers. Tests compute codes from the enum, so a reorder would keep every
 //! other test green — this snapshot is the guard. Changing it = new IDL version + announcement.
+#[test]
+fn idl_matches_the_frozen_0_1_0_snapshot() {
+    // The whole IDL (ix account order games compile against, events, types, errors) is frozen.
+    // Any change must bump the IDL version and add a new frozen file — never edit this one.
+    let current: serde_json::Value = serde_json::from_str(include_str!("../../../idls/lobby.json")).unwrap();
+    let frozen: serde_json::Value = serde_json::from_str(include_str!("../../../idls/lobby-0.1.0.frozen.json")).unwrap();
+    assert_eq!(current, frozen, "idls/lobby.json differs from the frozen 0.1.0 snapshot — bump the version");
+}
+
 fn idl() -> serde_json::Value {
     serde_json::from_str(include_str!("../../../idls/lobby.json")).unwrap()
 }
