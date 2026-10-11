@@ -21,13 +21,14 @@ A shared Solana program for **rooms, matchmaking, ready checks and rematch**, us
 - **Rematch**: after a match ends, players move as a group into a new private room within a time window.
 - **One player is in at most one room, hub-wide.** The program enforces this, not the client.
 - **No on-chain timers.** Every waiting phase has a deadline, and anyone can call the permissionless `tick` to apply it. A Cloudflare cron Worker ([`worker/`](worker/)) does this as a backstop.
-- **Rent**: whoever creates an account pays its rent, and `close_room` / `close_claim` refund it to that payer. A gasless relayer can pay on behalf of players.
+- **Rent**: rooms and player claims are funded by a `payer` signer (the player, or a gasless relayer on their behalf), and `close_room` / `close_claim` refund only that payer. The game owner funds the per-game config, which is never closed.
 
 ```
 Waiting ──► ReadyCheck ──► Starting ──► Playing ──► Ended
    │             │             │            │
    └─────────────┴─────────────┴────────────┴──► Cancelled      (deadlines via `tick`, or the game)
 ```
+Simplified: a ready check can also fall back to Waiting, and a solo host can go straight to Starting. Full diagram: [SKILL §2](skills/lobby-integration/SKILL.md#2-phases-and-deadlines).
 
 ## Repository layout
 
@@ -38,7 +39,7 @@ Waiting ──► ReadyCheck ──► Starting ──► Playing ──► Ende
 | `idls/` | The published IDL, its frozen snapshot, and the platform-core IDL used by `declare_program!` |
 | `worker/` | Lobby Worker: Cloudflare cron that cranks `tick`, `close_room` and `close_claim` ([README](worker/README.md)) |
 | `skills/lobby-integration/` | The integration guide (`SKILL.md`) |
-| `specs/designs/` | Design notes (Thai). `06-relayer-registration.md` holds the relayer registration values. |
+| `specs/designs/` | Design notes (Thai). The relayer registration values are also given in English in the SKILL guide (§7). |
 
 ## Build and test
 
@@ -53,7 +54,7 @@ Tests run against the prebuilt `.so`, so always build first; `scripts/test.sh` d
 
 ## Versioning
 
-The IDL is versioned and **0.1.0 is frozen**. Error codes (6000–6033), enum variants, account field order and instruction account order are append-only. Any breaking change ships as a new IDL version and goes through the hub's coordination process. Games CPI against a specific IDL version.
+The IDL is versioned and **0.1.0 is frozen**. Error codes (6000–6033), enum variants, account field order and instruction account order are append-only. Any breaking change will be announced with a new IDL version (and, if needed, a new program ID). Games CPI against a specific IDL version.
 
 ## Status
 

@@ -7,6 +7,7 @@ description: How to integrate a game program or a frontend with the blockchain-g
 
 > Program `lobby` · IDL **0.1.0** (frozen) · Anchor 1.2.1 · **devnet** `5zdBSvep3yV6v1SVD67uw9N5Wb3eT9Hp9D3eg4YSRqRu`
 > Source of truth: `idls/lobby.json` and `programs/lobby/src/`. If this guide and the IDL disagree, the IDL wins. Please report the mismatch.
+> Paths in this guide are relative to the root of the `lobby` repository that ships this file.
 
 ## 0. Mental model
 
@@ -15,7 +16,7 @@ description: How to integrate a game program or a frontend with the blockchain-g
 - **The game calls lobby; lobby never calls the game.** Lobby can still cancel a room on its own when a deadline passes, so a game must check the room's phase rather than wait to be told (§5.3).
 - **No timers on chain.** Every waiting phase stores an anchor timestamp and a TTL. Once the deadline passes, anyone may call `tick` to apply it. Until then, normal actions still work, so a late `ready()` that lands before the `tick` still counts.
 - **One player, one room, hub-wide.** Each player has one `PlayerClaim` PDA (`[b"claim", player]`). It is never "released": a claim is *live* only while the room it points at exists, isn't finished, and still seats that player as an active human. Leaving, being kicked, the room ending or the room being closed all free the player automatically.
-- **Whoever creates an account pays its rent, and gets it back on close.** The payer is stored as `rent_payer` and is the only address a close can refund. A gasless relayer may act as the payer (§7).
+- **Rooms and claims are funded by a `payer` signer**, which can be the player or a gasless relayer (§7). The payer is stored as `rent_payer`, and `close_room` / `close_claim` refund only that address. `LobbyConfig` and `Matchmaker` are paid by the game owner and are never closed.
 
 ## 1. Accounts and PDAs
 
@@ -123,13 +124,15 @@ Caller types:
 | `add_bot(seat)` / `remove_bot(seat)` | H | Waiting | Private rooms only. `add_bot` needs `bot_fill`. |
 | `kick_player(seat)` | H | Waiting | Empties the seat. The victim can't rejoin **this room** for 10 s. |
 | `request_start()` | H | Waiting | Needs `occupied ≥ min_seats` and `humans ≥ min_humans` → ReadyCheck, with the host already ready. |
-| `rematch_join()` | P | old room Ended | Joins the rematch room the old room points at. |
-| `rematch_create()` $ | P | old room Ended | Creates the rematch room and points the old room at it. Has the create cooldown. |
+| `rematch_join()` | P | old room Ended | Joins the rematch room the old room points at. That room must be in Waiting with a free seat (else `StaleRematch`). |
+| `rematch_create()` $ | P | old room Ended | Creates a new **private** rematch room with the caller as host, and points the old room at it. Has the create cooldown. The host then calls `request_start` as usual. |
 | `tick()` | A | any | Applies the first deadline that is due. If nothing is due it is a **successful no-op**. |
 | `close_room()` | A | Ended/Cancelled | After `retention`, closes the room and refunds `rent_payer` (who need not sign). |
 | `close_claim()` | A | — | Needs the claim idle ≥ **30 days**, not live, and no running kick cooldown. Closes it and refunds `rent_payer`. |
 | `begin_match()` | G | Starting | → Playing |
 | `end_match(result)` | G | Playing (Completed or Cancelled) · Starting (Cancelled only) | → Ended or Cancelled(GameCancelled) |
+
+**Rematch conditions** (both rematch instructions): the old room is `Ended` (not Cancelled) · `rematch_enabled` was on when it was created (else `ModeDisabled`) · `now < phase_since + ttl.rematch_window` (else `RematchClosed`) · the caller sat in it as a human, even if they later left (else `NotInRoster`). Accepted limitations: an idle rematch host can hold the group in Waiting until `ttl.lobby` (others may leave and create their own room), and a group can split into two rooms if the first rematch room becomes unjoinable.
 
 **Limits:**
 
@@ -173,7 +176,7 @@ update_config       owner(s) · game_entry · config(w)
 
 **First action of a new player.** If the claim account doesn't exist yet, send `[init_claim, <enter-room ix>]` in **one** transaction. A claim that already exists makes `init_claim` fail, so send it only when the claim is missing.
 
-**Private room:** `create_room`. Share the `room_id` (from the `RoomCreated` event or the Matchmaker counter). Friends call `join_room`. The host calls `request_start`, and everyone calls `ready()`.
+**Private room:** `create_room`. Share the `room_id` you derived `new_room` from (also in the `RoomCreated` event). Don't re-read the Matchmaker counter afterwards: it has already moved on. Friends call `join_room`. The host calls `request_start`, and everyone calls `ready()`.
 
 **Quick match:**
 ```
@@ -192,18 +195,38 @@ on 6001 StaleRematch → re-read old_room: join the new pointer, or create if th
 
 **Resume after reload:** there is no instruction for this. Read `PlayerClaim`. If `current` is `Some`, read that Room and run the liveness check client-side: the room exists, its phase is not terminal, and the player is in a seat with `Human && !left`.
 
-**Deadlines:** show countdowns using the deadline formulas in §2. When a deadline passes, any client in the room may send `tick()`. The Lobby Worker also sweeps every minute, so this is a UX improvement and not a requirement. Remember that `Clock` on chain can drift a few seconds from wall time.
+**Deadlines:** show countdowns using the deadline formulas in §2. When a deadline passes, any client in the room should send `tick()`. The Lobby Worker is a best-effort backstop with limited throughput (a few rooms per minute across all games), so clients should still tick. Remember that `Clock` on chain can drift a few seconds from wall time.
 
 **Ready-timeout griefing (accepted risk):** a player removed by the ready timeout can quick-match straight back into the same room. Frontends should disable quick match for **60 s** after the player sees their own `SeatChanged { cause: ReadyTimeout }`.
 
 ## 5. Game integration (CPI)
 
 ### 5.1 Prerequisites
-1. Register the game program in platform-core. This sets `GameEntry.owner` and `game_authority`, the game's PDA from seed `[b"game_authority"]`.
-2. The owner calls `init_lobby(params)` once.
+1. **Register the game in platform-core.** Platform-core's `register_game` instruction is signed by a hub account holding the GameRegistrar or Admin role, co-signed by the future game owner. The game program must already be deployed (upgradeable loader). Registration records `GameEntry.owner` and `game_authority`, the game's PDA from seed `[b"game_authority"]`. Ask the hub admins to register your game; lobby rejects room creation until the entry is `Active`.
+2. **The owner calls `init_lobby(params)` once**, from their own wallet (not relayed). `ConfigParams`:
+
+   | Field | Meaning |
+   |---|---|
+   | `max_seats` | Seats per room, 2–8 |
+   | `min_seats` | Occupied seats (humans + bots) needed for `request_start` |
+   | `min_humans` | Humans needed to start, and for a public room to be bot-filled |
+   | `public_enabled` / `private_enabled` | Which create instructions are allowed (joining existing rooms is never blocked) |
+   | `bot_fill` | Hosts may add bots, and public rooms fill with bots after `ttl.wait`. Set `false` unless your game can play bots. |
+   | `rematch_enabled` | Rooms created from now on allow rematch |
+   | `ttl` | `wait`, `ready`, `lobby`, `start`, `max_game`, `rematch_window`, `retention` in seconds (limits in §2) |
+
 3. Copy `idls/lobby.json` into your program and use `declare_program!(lobby)` (Anchor 1.2.1).
 
-### 5.2 Begin and end a match
+### Lifecycle of one match
+1. Players gather in a room. The last `ready()` (or a solo host's `request_start`) moves it to **Starting**.
+2. Your frontend sees `Starting` (from the Room account or a `PhaseChanged` event) and any player sends **your** start-game instruction within `ttl.start` (≤ 300 s), otherwise `tick` cancels the room (StartExpired).
+3. Your start-game instruction reads the roster from `room.seats`, creates your match account storing `room_id` (and anything else you need), and CPIs `begin_match` → Playing.
+4. Your move instructions run while the room is Playing (rules in §5.3).
+5. Your finish instruction CPIs `end_match(Completed)` → Ended, or `end_match(Cancelled)` → Cancelled.
+
+### 5.2 Begin and end a match (CPI)
+
+`begin_match` / `end_match` do not check that `GameEntry` is Active: a suspended game can still finish the matches already running.
 
 ```rust
 declare_program!(lobby);
@@ -230,7 +253,7 @@ A complete, tested example lives in `tests/mock-game/src/lib.rs`. It is test-onl
    - `Account<lobby::Room>` checks only owner and discriminator. Without the binding, anyone could pass another match's Playing room.
    - If you compare PDAs instead, derive under `lobby::ID` (`seeds::program = lobby::ID`).
 2. **Lobby can cancel a room without calling you.** That happens through `tick` (StartExpired or GameExpired) or when every human calls `leave_seat`. Rule 1 is how your game notices.
-3. **Don't rely on the `Room` after `retention`**, because anyone can close it then. Settle in the same transaction as `end_match` where you can.
+3. **Read `room.phase` before calling `end_match`.** If lobby has already cancelled the room (`Cancelled`), skip `end_match` and take your own cancel/refund path: calling it would revert the whole transaction with 6010. Otherwise settle in the same transaction as `end_match` where you can. Don't rely on the `Room` after `retention`, because anyone can close it then.
 4. **Errors that come back through CPI:**
 
    | Error | Meaning | Action |
@@ -241,13 +264,13 @@ A complete, tested example lives in `tests/mock-game/src/lib.rs`. It is test-onl
    | Anchor 2xxx / 3xxx | Your game passed the wrong accounts | Fix the call |
 
    Give your own errors an offset so they don't collide with lobby's 6000–6033: `#[error_code(offset = 6100)]`.
-5. Bots in hidden-information games are played by the game's own off-chain dealer, so lobby makes no assumption about who moves for a bot.
+5. Lobby only marks a seat as `Bot`; it never decides who moves for it. Your game (or its off-chain dealer) plays bots. If your game cannot play bots, set `bot_fill = false`.
 
 ## 6. Errors
 
 Anchor custom errors 6000–6033. They are append-only, so the numbers never change.
 
-**Retryable races.** Re-read the state and rebuild the transaction.
+**Possible races** — for player-signed instructions, re-read the state, then decide: retry, switch instruction (e.g. `quick_match_create` ↔ `quick_match_join`), or show the new state. Retrying unchanged is pointless when the state has really moved on (e.g. `NotWaiting` from `leave_room` after the match started). Inside a game CPI, 3012 is final (§5.3).
 
 | Code | Name | Cause |
 |---|---|---|
@@ -285,9 +308,29 @@ Anchor custom errors 6000–6033. They are append-only, so the numbers never cha
 - Every close refunds the stored `rent_payer`, and only that address. `rent_payer` is written once when the account is created.
 - **Gasless relayer:**
   - Only the four $ instructions take a payer slot, at index 1.
-  - Every other instruction can still be fee-sponsored.
+  - Player-facing instructions can be fee-sponsored (table below). `init_lobby` / `update_config` are signed by the game owner's own wallet, and `close_room` / `close_claim` are run by cranks with their own wallets: these four are **not** sponsored. `begin_match` / `end_match` are sponsored, if at all, as part of the game's own instruction.
   - When sending `tick` through the relayer, append the user as a trailing **read-only signer**. `tick` ignores `remaining_accounts`.
-  - Registration values are in `specs/designs/06-relayer-registration.md`: discriminators, account counts, `max_rent_lamports`, CU samples (max about 38k, so no ComputeBudget instruction is needed) and retryable codes.
+  - Registration values (also in `specs/designs/06-relayer-registration.md`, Thai). Data length is 8 (discriminator only) or 9 (`+ seat: u8`). Max CU measured ≈ 38k, so no ComputeBudget instruction is needed. Retryable codes: 6000–6003 and 3012.
+
+    | Instruction | Discriminator (hex) | Accounts | Payer index | `max_rent_lamports` |
+    |---|---|---|---|---|
+    | `init_claim` | `305be43eaa120413` | 4 | 1 | 1 605 280 |
+    | `create_room` | `82a62002f778b235` | 9 | 1 | 3 144 520 |
+    | `quick_match_create` | `9fafa9182ee7c519` | 9 | 1 | 3 144 520 |
+    | `rematch_create` | `d2aed22228bf873c` | 11 | 1 | 3 144 520 |
+    | `join_room` | `5fe8bc517c824e8b` | 4 | — | 0 |
+    | `quick_match_join` | `c850ecd7d412d35f` | 5 | — | 0 |
+    | `rematch_join` | `cfa102ca815f71ac` | 5 | — | 0 |
+    | `leave_room` | `f92aef80c014729c` | 3 | — | 0 |
+    | `ready` | `15753c496079d14b` | 2 | — | 0 |
+    | `leave_seat` | `6cf2b1062de3918e` | 2 | — | 0 |
+    | `add_bot` | `21fbf0a29f2c334a` | 2 | — | 0 |
+    | `remove_bot` | `31ef62d47862e1fc` | 2 | — | 0 |
+    | `kick_player` | `e6e1f4c13a0bc0c7` | 3 | — | 0 |
+    | `request_start` | `8c0ee8555d590199` | 2 | — | 0 |
+    | `tick` | `5c4f2c0865503f0f` | 3 (room, matchmaker or placeholder, user as trailing read-only signer) | — | 0 |
+
+    `max_rent_lamports` for room creation is the 8-seat ceiling, because one lobby serves every game.
   - The relayer's rent budget is **not** refunded when an account closes. That is why the program has the create cooldown and the 30-day `close_claim` rule.
 - **Lobby Worker** (`worker/`) runs on its own fee-only wallet, which has no privilege in the program:
   - `tick` every minute
@@ -322,7 +365,7 @@ Events carry no TTLs. Read them from the `Room` account.
 - [ ] Frontend:
   - [ ] always passes `prev_room`, with the program ID placeholder when there is none
   - [ ] uses `[init_claim, …]` for new players
-  - [ ] retries 6000–6003 and 3012 after re-reading state
+  - [ ] on 6000–6003 and 3012, re-reads state before retrying or switching instruction
 - [ ] Frontend shows countdowns and sends `tick` when a deadline passes, with the user as trailing read-only signer if relayed
 - [ ] Frontend disables quick match for 60 s after the player is removed by ReadyTimeout
 - [ ] Relayer registration copied from `06-relayer-registration.md`
