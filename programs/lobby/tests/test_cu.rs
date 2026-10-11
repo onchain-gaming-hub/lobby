@@ -62,7 +62,7 @@ fn measure_all() {
         }
         // kick + rejoin-less: kick the last one, add bot, remove bot, add bot again
         let last = others.pop().unwrap();
-        let seat = (n - 1) as u8;
+        let seat = n - 1;
         cu("kick_player", case, ok(send(&mut svm, &[ix_kick(&game, id, &host.pubkey(), seat, &last.pubkey())], &[&host])));
         cu("add_bot", case, ok(send(&mut svm, &[ix_add_bot(&game, id, &host.pubkey(), seat)], &[&host])));
         cu("remove_bot", case, ok(send(&mut svm, &[ix_remove_bot(&game, id, &host.pubkey(), seat)], &[&host])));
