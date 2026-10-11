@@ -48,3 +48,40 @@ fn enum_variant_order_is_frozen() {
         assert_eq!(&got[..want.len()], *want, "{name} reordered");
     }
 }
+
+#[test]
+fn event_and_struct_field_order_is_frozen() {
+    // indexers decode events and memcmp/deserialize accounts by field order
+    let idl = idl();
+    let events: Vec<&str> = idl["events"].as_array().unwrap().iter().map(|e| e["name"].as_str().unwrap()).collect();
+    for e in ["ClaimClosed", "ClaimCreated", "HostChanged", "LobbyConfigUpdated", "LobbyInitialized", "MatchmakerPointer",
+              "PhaseChanged", "PlayerLeftSeat", "PlayerReady", "RoomClosed", "RoomCreated", "SeatChanged"] {
+        assert!(events.contains(&e), "event {e} removed/renamed");
+    }
+    let frozen: &[(&str, &[&str])] = &[
+        ("Room", &["version", "bump", "rent_payer", "game_program", "room_id", "phase", "end_reason", "is_public", "min_seats",
+                   "min_humans", "bot_fill", "rematch_enabled", "ttl", "phase_since", "last_human_activity_at", "host",
+                   "rematch_room_id", "seats", "reserved"]),
+        ("PlayerClaim", &["version", "bump", "rent_payer", "player", "last_joined_at", "current", "kick", "last_created_at", "reserved"]),
+        ("LobbyConfig", &["version", "bump", "game_program", "max_seats", "min_seats", "min_humans", "public_enabled",
+                          "private_enabled", "bot_fill", "rematch_enabled", "ttl", "reserved"]),
+        ("Matchmaker", &["version", "bump", "next_room_id", "open_public_room", "reserved"]),
+        ("Seat", &["kind", "player", "ready", "left"]),
+        ("RoomTtl", &["wait", "ready", "lobby", "start", "max_game", "rematch_window", "retention"]),
+        ("RoomRef", &["game_program", "room_id"]),
+        ("KickMark", &["room", "until"]),
+        ("ConfigParams", &["max_seats", "min_seats", "min_humans", "public_enabled", "private_enabled", "bot_fill", "rematch_enabled", "ttl"]),
+        ("SeatChanged", &["game_program", "room_id", "seat", "kind", "player", "cause", "at"]),
+        ("PhaseChanged", &["game_program", "room_id", "from", "to", "end_reason", "at"]),
+        ("RoomCreated", &["game_program", "room_id", "is_public", "host", "rent_payer", "rematch_of", "at"]),
+        ("RoomClosed", &["game_program", "room_id", "refunded_to", "lamports", "at"]),
+        ("ClaimCreated", &["player", "rent_payer", "at"]),
+        ("ClaimClosed", &["player", "refunded_to", "lamports", "at"]),
+    ];
+    let types = idl["types"].as_array().unwrap();
+    for (name, want) in frozen {
+        let t = types.iter().find(|t| t["name"] == *name).unwrap_or_else(|| panic!("type {name}"));
+        let got: Vec<&str> = t["type"]["fields"].as_array().unwrap().iter().map(|f| f["name"].as_str().unwrap()).collect();
+        assert_eq!(&got[..], *want, "{name} fields changed");
+    }
+}

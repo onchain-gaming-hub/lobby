@@ -32,12 +32,16 @@ fn only_the_games_pda_can_begin_or_end() {
     let r = send(&mut svm, &[ix_begin_match_direct(&game, id, &impostor.pubkey())], &[&impostor]);
     assert_err(&r, code(E::BadGameAuthority));
 
-    // mock-game trying to drive another game's room: GameEntry is bound to room.game_program,
-    // so its game_authority is not mock-game's PDA
+    // mock-game driving another game's room with the other game's entry → its PDA is not that authority
     let other_game = Pubkey::new_unique();
     setup_game(&mut svm, other_game, default_params());
     let (oid, _, _) = starting_room(&mut svm, &other_game);
     assert_err(&crank(&mut svm, ix_start_game(&other_game, oid)), code(E::BadGameAuthority));
+    // …and with mock-game's OWN Active entry (whose authority it can sign for): GameEntry is
+    // seed-bound to room.game_program → ConstraintSeeds. This is the check that matters (Opus gate P5 F1).
+    let mut ix = ix_start_game(&other_game, oid);
+    ix.accounts[1].pubkey = game_entry_pda(&GAME);
+    assert_err(&crank(&mut svm, ix), 2006);
 }
 
 #[test]
