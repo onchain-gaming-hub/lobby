@@ -1,5 +1,6 @@
 //! 06-relayer-registration.md must match idls/lobby.json — the relayer is registered from that doc.
-use {::lobby::*, anchor_lang::Space};
+//! (Run through scripts/test.sh so idls/lobby.json is regenerated from the current source.)
+use {::lobby::*, anchor_lang::Space, std::collections::BTreeSet};
 
 fn idl() -> serde_json::Value {
     serde_json::from_str(include_str!("../../../idls/lobby.json")).unwrap()
@@ -11,35 +12,48 @@ fn rent(bytes: usize) -> u64 {
     (128 + bytes as u64) * DEVNET_LAMPORTS_PER_BYTE
 }
 
+/// Rows of a markdown section whose first cell starts with a backticked name.
+fn section(title: &str) -> Vec<Vec<String>> {
+    let start = DOC.find(title).unwrap_or_else(|| panic!("section {title}"));
+    let rest = &DOC[start + title.len()..];
+    let end = rest.find("\n## ").unwrap_or(rest.len());
+    rest[..end]
+        .lines()
+        .filter(|l| l.starts_with("| `"))
+        .map(|l| l.split('|').map(|c| c.trim().to_string()).collect())
+        .collect()
+}
+
+/// All backticked ix names in a first cell, e.g. "`init_lobby` · `update_config`".
+fn names(cell: &str) -> Vec<String> {
+    cell.split('`').skip(1).step_by(2).map(str::to_string).collect()
+}
+
 #[test]
-fn sponsored_rows_match_the_idl() {
+fn sponsored_rows_match_the_idl_exactly() {
     let idl = idl();
     let ixs = idl["instructions"].as_array().unwrap();
-    let mut rows = 0;
-    for line in DOC.lines().filter(|l| l.starts_with("| `")) {
-        let cols: Vec<&str> = line.split('|').map(str::trim).collect();
-        // | `ix` [(crank)] | `disc` | accounts | payer_index | max_data_len | max_rent | CU |
-        if cols.len() < 8 || !cols[2].starts_with('`') {
-            continue;
-        }
-        let name = cols[1].trim_start_matches('`').split('`').next().unwrap();
-        let Some(ix) = ixs.iter().find(|i| i["name"] == name) else { continue };
-        rows += 1;
+    let rows = section("## 1.");
+    assert_eq!(rows.len(), 15, "06 §1 must list all 15 sponsored ixs");
+    for cols in rows {
+        let name = names(&cols[1])[0].clone();
+        let ix = ixs.iter().find(|i| i["name"] == name.as_str()).unwrap_or_else(|| panic!("{name} not in IDL"));
         let disc: String = ix["discriminator"].as_array().unwrap().iter().map(|b| format!("{:02x}", b.as_u64().unwrap())).collect();
-        assert_eq!(cols[2].trim_matches('`'), disc, "{name} discriminator");
+        assert_eq!(cols[2], format!("`{disc}`"), "{name} discriminator");
         let accs = ix["accounts"].as_array().unwrap();
-        let n = accs.len();
-        let crank = name == "tick";
-        let want_accounts = if crank { format!("**{0}..{0}**", n + 1) } else { n.to_string() };
-        assert!(cols[3].starts_with(&want_accounts), "{name} accounts: doc {:?} want {want_accounts}", cols[3]);
+        // accounts cell: exactly "N" or "**N..N**" (+ an optional explanation in parentheses)
+        let acc_cell = cols[3].split(" (").next().unwrap();
+        let want = if name == "tick" { format!("**{0}..{0}**", accs.len() + 1) } else { accs.len().to_string() };
+        assert_eq!(acc_cell, want, "{name} accounts");
         let payer = accs.iter().position(|a| a["name"] == "payer");
-        match payer {
-            Some(i) => assert_eq!(cols[4], format!("**{i}**"), "{name} payer_index"),
-            None => assert_eq!(cols[4], "—", "{name} payer_index"),
+        assert_eq!(cols[4], payer.map_or("—".to_string(), |i| format!("**{i}**")), "{name} payer_index");
+        // max_data_len: 8-byte discriminator + Borsh args; every sponsored arg must be a u8
+        let args = ix["args"].as_array().unwrap();
+        for a in args {
+            assert_eq!(a["type"], "u8", "{name}: arg {} is not u8 — recompute max_data_len", a["name"]);
         }
-        let data_len = 8 + ix["args"].as_array().unwrap().len(); // all sponsored args are 1-byte (u8)
-        assert_eq!(cols[5], data_len.to_string(), "{name} max_data_len");
-        let want_rent = match name {
+        assert_eq!(cols[5], (8 + args.len()).to_string(), "{name} max_data_len");
+        let want_rent = match name.as_str() {
             "init_claim" => rent(8 + PlayerClaim::INIT_SPACE),
             _ if payer.is_some() => rent(Room::space(MAX_SEATS as usize)),
             _ => 0,
@@ -47,12 +61,25 @@ fn sponsored_rows_match_the_idl() {
         let doc_rent: u64 = cols[6].trim_matches('*').replace(',', "").parse().unwrap_or_else(|_| panic!("{name} rent {:?}", cols[6]));
         assert_eq!(doc_rent, want_rent, "{name} max_rent_lamports");
     }
-    assert_eq!(rows, 15, "06 must list all 15 sponsored ixs");
 }
 
 #[test]
-fn min_balance_matches() {
+fn sponsored_plus_not_sponsored_is_exactly_the_idl() {
+    let idl: BTreeSet<String> = idl()["instructions"].as_array().unwrap().iter().map(|i| i["name"].as_str().unwrap().to_string()).collect();
+    let mut doc = BTreeSet::new();
+    for title in ["## 1.", "## 2."] {
+        for cols in section(title) {
+            for n in names(&cols[1]) {
+                assert!(doc.insert(n.clone()), "{n} listed twice");
+            }
+        }
+    }
+    assert_eq!(doc, idl, "every IDL ix must be in exactly one of 06 §1 / §2");
+}
+
+#[test]
+fn min_balance_row_matches() {
     let want = 4 * rent(Room::space(MAX_SEATS as usize)) + 1_000_000;
-    assert_eq!(want, 13_578_080);
-    assert!(DOC.contains("13,578,080"));
+    let row = DOC.lines().find(|l| l.contains("`min_balance_lamports`")).expect("min_balance row");
+    assert!(row.contains(&format!("**{}**", want.to_string().as_bytes().rchunks(3).rev().map(|c| std::str::from_utf8(c).unwrap()).collect::<Vec<_>>().join(","))), "{row}");
 }
