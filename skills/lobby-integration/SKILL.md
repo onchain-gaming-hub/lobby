@@ -7,7 +7,7 @@ description: How to integrate a game program or a frontend with the blockchain-g
 
 > Program `lobby` · IDL **0.1.0** (frozen) · Anchor 1.2.1 · **devnet** `5zdBSvep3yV6v1SVD67uw9N5Wb3eT9Hp9D3eg4YSRqRu`
 > Source of truth: `idls/lobby.json` and `programs/lobby/src/`. If this guide and the IDL disagree, the IDL wins. Please report the mismatch.
-> Repository: https://github.com/solana-games-hub/lobby · paths in this guide are relative to its root.
+> Repository: https://github.com/onchain-gaming-hub/lobby · paths in this guide are relative to its root.
 
 ## 0. Mental model
 
