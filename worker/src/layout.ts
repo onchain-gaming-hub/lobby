@@ -28,12 +28,16 @@ export const ROOM = {
   roomId: 74,
   phase: 82,
   isPublic: 84,
+  minHumans: 86,
   botFill: 87,
   ttl: 89, // RoomTtl: wait, ready, lobby, start, max_game, rematch_window, retention (u32 each)
   phaseSince: 117,
   lastHumanActivityAt: 125,
   sliceLen: 133, // first variable field (`host`) starts here
 } as const;
+
+/** Seat = kind u8 (Empty 0 · Human 1 · Bot 2) + player 32 + ready u8 + left u8. */
+export const SEAT = { len: 35, kindHuman: 1, left: 34 } as const;
 
 export const CLAIM = {
   rentPayer: 10,
@@ -49,7 +53,10 @@ export interface RoomView {
   roomId: bigint;
   phase: Phase;
   isPublic: boolean;
+  minHumans: number;
   botFill: boolean;
+  /** active humans (`Human && !left`) — null when decoded from the fixed-prefix slice only */
+  humans: number | null;
   ttl: { wait: number; ready: number; lobby: number; start: number; maxGame: number; retention: number };
   phaseSince: number;
   lastHumanActivityAt: number;
@@ -72,7 +79,9 @@ export function decodeRoom(d: Uint8Array): RoomView | null {
     roomId: v.getBigUint64(ROOM.roomId, true),
     phase: d[ROOM.phase] as Phase,
     isPublic: d[ROOM.isPublic] === 1,
+    minHumans: d[ROOM.minHumans],
     botFill: d[ROOM.botFill] === 1,
+    humans: countHumans(d),
     ttl: {
       wait: v.getUint32(t, true),
       ready: v.getUint32(t + 4, true),
@@ -96,6 +105,22 @@ export function decodeClaim(d: Uint8Array): ClaimView | null {
     lastJoinedAt: Number(v.getBigInt64(CLAIM.lastJoinedAt, true)),
     current: d[c] === 1 ? { gameProgram: d.slice(c + 1, c + 33), roomId: v.getBigUint64(c + 33, true) } : null,
   };
+}
+
+/** Walks host: Option<Pubkey> · rematch_room_id: Option<u64> · seats: Vec<Seat> (borsh: None = 1 byte). */
+function countHumans(d: Uint8Array): number | null {
+  let o = ROOM.sliceLen;
+  if (d.length < o + 1) return null;
+  o += d[o] === 1 ? 33 : 1;
+  if (d.length < o + 1) return null;
+  o += d[o] === 1 ? 9 : 1;
+  if (d.length < o + 4) return null;
+  const n = view(d).getUint32(o, true);
+  o += 4;
+  if (d.length < o + n * SEAT.len) return null;
+  let humans = 0;
+  for (let i = 0; i < n; i++, o += SEAT.len) if (d[o] === SEAT.kindHuman && d[o + SEAT.left] === 0) humans++;
+  return humans;
 }
 
 function view(d: Uint8Array): DataView {

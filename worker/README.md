@@ -7,7 +7,7 @@ No privileges, no cache: each run reads the chain, simulates, and sends only whe
 |------|-----|-----------------------------------------------|
 | `* * * * *` | `tick` | Rooms with a deadline that may have passed |
 | `*/10 * * * *` | `close_room` | Ended/Cancelled rooms past `retention` → rent back to `rent_payer` |
-| `17 3 * * *` | `close_claim` | claims idle ≥ 30 days (program checks liveness + kick) |
+| `17 * * * *` | `close_claim` (hourly · cap 20/run) | claims idle ≥ 30 days (program checks liveness + kick) |
 
 ## Env
 

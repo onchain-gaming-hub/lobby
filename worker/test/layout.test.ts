@@ -1,7 +1,7 @@
 // Re-derives every raw offset / discriminator in src/layout.ts from the frozen IDL 0.1.0.
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { CLAIM, DISC, Phase, ROOM, decodeClaim, decodeRoom } from '../src/layout';
+import { CLAIM, DISC, Phase, ROOM, SEAT, decodeClaim, decodeRoom } from '../src/layout';
 
 type IdlType = string | { defined?: { name: string }; option?: unknown; vec?: unknown; array?: [IdlType, number] };
 interface IdlTypeDef {
@@ -72,6 +72,7 @@ describe('layout matches idls/lobby.json 0.1.0', () => {
       roomId: o.room_id,
       phase: o.phase,
       isPublic: o.is_public,
+      minHumans: o.min_humans,
       botFill: o.bot_fill,
       ttl: o.ttl,
       phaseSince: o.phase_since,
@@ -82,6 +83,16 @@ describe('layout matches idls/lobby.json 0.1.0', () => {
     expect(ttl).toEqual(['wait', 'ready', 'lobby', 'start', 'max_game', 'rematch_window', 'retention']);
     const phases = typeDef('Phase').type.variants!.map((v) => v.name);
     expect(phases).toEqual(Object.keys(Phase));
+  });
+
+  it('Seat layout + variable part order', () => {
+    const f = typeDef('Seat').type.fields!;
+    expect(f.map((x) => x.name)).toEqual(['kind', 'player', 'ready', 'left']);
+    expect(size({ defined: { name: 'Seat' } })).toBe(SEAT.len);
+    expect(1 + 32 + 1).toBe(SEAT.left);
+    expect(typeDef('SeatKind').type.variants!.map((v) => v.name)).toEqual(['Empty', 'Human', 'Bot']);
+    const names = typeDef('Room').type.fields!.map((x) => x.name);
+    expect(names.slice(names.indexOf('host'))).toEqual(['host', 'rematch_room_id', 'seats', 'reserved']);
   });
 
   it('PlayerClaim offsets', () => {
@@ -116,6 +127,27 @@ describe('decode', () => {
     expect(r.ttl.ready).toBe(30);
     expect(r.ttl.retention).toBe(600);
     expect(r.phaseSince).toBe(1000);
+  });
+
+  it('counts active humans from the whole account (host / rematch Some or None)', () => {
+    const seat = (kind: number, left = 0) => [kind, ...new Array(32).fill(1), 0, left];
+    const seats = [seat(1), seat(1, 1), seat(2), seat(0), seat(1)]; // human · left human · bot · empty · human
+    for (const [host, rematch] of [[[0], [0]], [[1, ...new Array(32).fill(5)], [1, 9, 0, 0, 0, 0, 0, 0, 0]]]) {
+      const tail = [...host, ...rematch, seats.length, 0, 0, 0, ...seats.flat(), ...new Array(32).fill(0)];
+      const d = new Uint8Array(ROOM.sliceLen + tail.length);
+      d.set(DISC.room);
+      d[ROOM.minHumans] = 2;
+      d.set(tail, ROOM.sliceLen);
+      const r = decodeRoom(d)!;
+      expect(r.humans).toBe(2);
+      expect(r.minHumans).toBe(2);
+    }
+  });
+
+  it('slice only → humans unknown', () => {
+    const d = new Uint8Array(ROOM.sliceLen);
+    d.set(DISC.room);
+    expect(decodeRoom(d)!.humans).toBeNull();
   });
 
   it('rejects other accounts and short slices', () => {

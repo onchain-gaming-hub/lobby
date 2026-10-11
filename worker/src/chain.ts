@@ -25,17 +25,20 @@ export function rpcFor(url: string): Rpc {
   return createSolanaRpc(url);
 }
 
-/** Accounts of one type (discriminator at offset 0), sliced to the fixed-offset prefix. */
+/**
+ * Accounts of one type (discriminator at offset 0) — sliced to the fixed-offset prefix, or whole when
+ * `sliceLen` is omitted. ⚠️ unpaged: fine at devnet scale · measure before mainnet (P7 gate note).
+ */
 export async function fetchByDiscriminator(
   rpc: Rpc,
   program: Address,
   disc: Uint8Array,
-  sliceLen: number,
+  sliceLen?: number,
 ): Promise<{ address: Address; data: Uint8Array }[]> {
   const res = await rpc
     .getProgramAccounts(program, {
       encoding: 'base64',
-      dataSlice: { offset: 0, length: sliceLen },
+      ...(sliceLen === undefined ? {} : { dataSlice: { offset: 0, length: sliceLen } }),
       filters: [{ memcmp: { offset: 0n, bytes: getBase58Decoder().decode(disc) as Base58EncodedBytes, encoding: 'base58' } }],
     })
     .send();

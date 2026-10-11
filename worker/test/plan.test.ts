@@ -13,6 +13,8 @@ import {
   matchmakerPda,
   roomClosable,
   roomPda,
+  EXPECTED_REJECTIONS,
+  tickDueAt,
   tickIx,
   tickMaybeDue,
 } from '../src/plan';
@@ -28,7 +30,9 @@ const room = (o: Partial<RoomView> = {}): RoomView => ({
   roomId: 7n,
   phase: Phase.Waiting,
   isPublic: false,
+  minHumans: 1,
   botFill: false,
+  humans: null,
   ttl: { wait: 60, ready: 30, lobby: 1800, start: 60, maxGame: 3600, retention: 600 },
   phaseSince: 1000,
   lastHumanActivityAt: 1000,
@@ -53,6 +57,18 @@ describe('tickMaybeDue mirrors handle_tick deadlines', () => {
     expect(tickMaybeDue(room({ isPublic: true, botFill: true }), 1060)).toBe(true);
     expect(tickMaybeDue(room({ isPublic: true, botFill: false }), 1060)).toBe(false);
     expect(tickMaybeDue(room({ isPublic: false, botFill: true }), 1060)).toBe(false);
+  });
+  it('Waiting: backfill is exact once seats are decoded (humans < min_humans → only lobby expiry)', () => {
+    const pub = { isPublic: true, botFill: true, minHumans: 2 };
+    expect(tickMaybeDue(room({ ...pub, humans: 1 }), 1060)).toBe(false);
+    expect(tickDueAt(room({ ...pub, humans: 1 }))).toBe(1000 + 1800);
+    expect(tickMaybeDue(room({ ...pub, humans: 2 }), 1060)).toBe(true);
+    expect(tickMaybeDue(room({ ...pub, humans: null }), 1060)).toBe(true); // slice only → assume possible
+  });
+  it('due-at is the earliest deadline (sort key)', () => {
+    expect(tickDueAt(room({ isPublic: true, botFill: true, humans: 1, lastHumanActivityAt: 0 }))).toBe(60 + 1000);
+    expect(tickDueAt(room({ lastHumanActivityAt: 0 }))).toBe(1800);
+    expect(tickDueAt(room({ phase: Phase.Ended }))).toBeNull();
   });
   it('ReadyCheck / Starting / Playing', () => {
     expect(tickMaybeDue(room({ phase: Phase.ReadyCheck }), 1029)).toBe(false);
@@ -91,9 +107,17 @@ describe('instruction builders follow the IDL account order', () => {
       { address: PROGRAM, role: AccountRole.READONLY },
     ]);
   });
-  it('tick public → matchmaker PDA writable', async () => {
-    const ix = await tickIx(PROGRAM, ROOM_ADDR, room({ isPublic: true }));
-    expect(ix.accounts![1]).toEqual({ address: '8MKTm2rFxJhU2SMzykgnjDPWmEP3ef1AQZeQyXvdXeaE', role: AccountRole.WRITABLE });
+  it('tick public Waiting / ReadyCheck → matchmaker PDA writable', async () => {
+    for (const phase of [Phase.Waiting, Phase.ReadyCheck]) {
+      const ix = await tickIx(PROGRAM, ROOM_ADDR, room({ isPublic: true, phase }));
+      expect(ix.accounts![1]).toEqual({ address: '8MKTm2rFxJhU2SMzykgnjDPWmEP3ef1AQZeQyXvdXeaE', role: AccountRole.WRITABLE });
+    }
+  });
+  it('tick public Starting / Playing → placeholder (do not lock the hot Matchmaker)', async () => {
+    for (const phase of [Phase.Starting, Phase.Playing]) {
+      const ix = await tickIx(PROGRAM, ROOM_ADDR, room({ isPublic: true, phase }));
+      expect(ix.accounts![1]).toEqual({ address: PROGRAM, role: AccountRole.READONLY });
+    }
   });
   it('close_room → rent_payer from the account', () => {
     const ix = closeRoomIx(PROGRAM, ROOM_ADDR, room());
@@ -119,6 +143,9 @@ describe('simulation reading', () => {
     expect(emittedEvent(['Program log: Instruction: Tick', 'Program 5zdB… success'])).toBe(false);
     expect(emittedEvent(['Program data: spJD3tAk1ds='])).toBe(true);
     expect(emittedEvent(null)).toBe(false);
+  });
+  it('expected rejections = race / not-yet codes from 04 §2', () => {
+    expect([...EXPECTED_REJECTIONS].sort()).toEqual([3012, 6006, 6019, 6025, 6032]);
   });
   it('custom error code', () => {
     expect(customErrorCode({ InstructionError: [0, { Custom: 6025 }] })).toBe(6025);

@@ -12,22 +12,31 @@ import { CLAIM_IDLE_SECS, type ClaimView, DISC, Phase, type RoomView, SEED } fro
 
 const addr = (b: Uint8Array) => getAddressDecoder().decode(b);
 
-/** Some deadline of this room may have passed (02 §4 · mirrors `handle_tick`'s due checks). */
-export function tickMaybeDue(r: RoomView, now: number): boolean {
-  const due = (anchor: number, ttl: number) => now >= anchor + ttl;
+/**
+ * Earliest deadline of this room per `handle_tick` (02 §4), or null if none applies.
+ * With seats decoded (`humans` set) this is exact; from the slice alone backfill is assumed possible.
+ */
+export function tickDueAt(r: RoomView): number | null {
   switch (r.phase) {
-    case Phase.Waiting:
-      // backfill also needs humans >= min_humans (seats are past the raw slice) → simulate decides
-      return due(r.lastHumanActivityAt, r.ttl.lobby) || (r.isPublic && r.botFill && due(r.phaseSince, r.ttl.wait));
+    case Phase.Waiting: {
+      const expiry = r.lastHumanActivityAt + r.ttl.lobby;
+      const backfill = r.isPublic && r.botFill && (r.humans === null || r.humans >= r.minHumans);
+      return backfill ? Math.min(expiry, r.phaseSince + r.ttl.wait) : expiry;
+    }
     case Phase.ReadyCheck:
-      return due(r.phaseSince, r.ttl.ready);
+      return r.phaseSince + r.ttl.ready;
     case Phase.Starting:
-      return due(r.phaseSince, r.ttl.start);
+      return r.phaseSince + r.ttl.start;
     case Phase.Playing:
-      return due(r.phaseSince, r.ttl.maxGame);
+      return r.phaseSince + r.ttl.maxGame;
     default:
-      return false;
+      return null;
   }
+}
+
+export function tickMaybeDue(r: RoomView, now: number): boolean {
+  const at = tickDueAt(r);
+  return at !== null && now >= at;
 }
 
 export function roomClosable(r: RoomView, now: number): boolean {
@@ -60,16 +69,23 @@ export async function claimPda(program: Address, player: Uint8Array): Promise<Ad
 /** Optional account left out = the program ID, read-only (Anchor `to_account_metas` for `None`). */
 const placeholder = (program: Address) => ({ address: program, role: AccountRole.READONLY });
 
-/** `tick`: [room (w), matchmaker (w) | placeholder]. Public rooms always get the matchmaker (02 §6). */
+/**
+ * `tick`: [room (w), matchmaker (w) | placeholder]. Only Waiting / ReadyCheck transitions of a public room
+ * touch the pointer (02 §6) — Starting / Playing get the placeholder so the hot Matchmaker isn't locked.
+ */
 export async function tickIx(program: Address, room: Address, r: RoomView): Promise<Instruction> {
   return {
     programAddress: program,
     accounts: [
       { address: room, role: AccountRole.WRITABLE },
-      r.isPublic ? { address: await matchmakerPda(program, r.gameProgram), role: AccountRole.WRITABLE } : placeholder(program),
+      needsMatchmaker(r) ? { address: await matchmakerPda(program, r.gameProgram), role: AccountRole.WRITABLE } : placeholder(program),
     ],
     data: DISC.tick,
   };
+}
+
+function needsMatchmaker(r: RoomView): boolean {
+  return r.isPublic && (r.phase === Phase.Waiting || r.phase === Phase.ReadyCheck);
 }
 
 /** `close_room`: [room (w), rent_payer (w)] — refund pinned by `has_one` (R3). */
@@ -103,6 +119,12 @@ export async function closeClaimIx(program: Address, claim: Address, c: ClaimVie
 export function emittedEvent(logs: readonly string[] | null): boolean {
   return (logs ?? []).some((l) => l.startsWith('Program data: '));
 }
+
+/**
+ * Rejections that are a normal race / not-yet (04 §2) — logged at info. Anything else is a Worker bug → error.
+ * 3012 AccountNotInitialized (closed meanwhile) · 6006 ClaimLive · 6019 KickCooldown · 6025 RetentionNotReached · 6032 ClaimNotIdle
+ */
+export const EXPECTED_REJECTIONS: ReadonlySet<number> = new Set([3012, 6006, 6019, 6025, 6032]);
 
 /** Custom program error code from a simulate `err`, if any. */
 export function customErrorCode(err: unknown): number | null {
