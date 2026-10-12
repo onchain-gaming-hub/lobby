@@ -2,6 +2,7 @@
 name = "lobby"
 version = "0.1.0"
 description = "lobby — rooms / matchmaking / readyCheck / rematch for blockchain-games-hub (specs/designs/)"
+license = "MIT"
 edition.workspace = true
 rust-version.workspace = true
 
